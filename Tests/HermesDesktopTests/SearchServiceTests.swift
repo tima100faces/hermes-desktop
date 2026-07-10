@@ -4,6 +4,7 @@ import SwiftData
 
 // MARK: - SearchServiceTests
 
+@MainActor
 final class SearchServiceTests: XCTestCase {
 
     var modelContainer: ModelContainer!

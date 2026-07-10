@@ -306,6 +306,7 @@ final class SidebarViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.errorMessage)
 
         // Create a valid project to delete
+        viewModel.errorMessage = nil  // clear any residual error state
         viewModel.newProjectName = "Delete Me"
         viewModel.createProject(context: modelContext)
 
@@ -313,7 +314,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.requestDelete(viewModel.selectedProject!)
         viewModel.confirmDelete(context: modelContext)
 
-        // Assert — error was cleared by the create, and deletion succeeded
+        // Assert — deletion succeeded, no error
         XCTAssertNil(viewModel.errorMessage)
     }
 }

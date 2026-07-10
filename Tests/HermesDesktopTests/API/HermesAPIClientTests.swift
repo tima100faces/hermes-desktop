@@ -50,12 +50,11 @@ final class HermesAPIClientTests: XCTestCase {
         try await keychain.save(key: "test-api-key-12345")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         MockAPIURLProtocol.mockData = nil
         MockAPIURLProtocol.mockStatusCode = 200
         MockAPIURLProtocol.lastAuthorizationHeader = nil
-        // Clean up the test key from the Keychain.
-        try? keychain.delete()
+        try? await keychain.delete()
     }
 
     /// Creates a `HermesAPIClient` whose `URLSession` routes through `MockAPIURLProtocol`.
