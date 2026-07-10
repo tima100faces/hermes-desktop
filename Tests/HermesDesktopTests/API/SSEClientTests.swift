@@ -63,7 +63,7 @@ final class SSEClientTests: XCTestCase {
 
     func testParseTextDelta() async {
         let sseData = """
-        event: text_delta
+        event: message.delta
         data: {"content": "Hello world"}
 
         """.data(using: .utf8)!
@@ -80,11 +80,32 @@ final class SSEClientTests: XCTestCase {
         XCTAssertNil(events[0].error)
     }
 
+    // MARK: - Multiple Data Lines
+
+    /// Per the SSE spec, multiple `data:` lines within one event are joined
+    /// with `\n` into a single value — never overwritten by the last one.
+    func testParseEventWithMultipleDataLines() async {
+        let sseData = """
+        event: message.delta
+        data: {"content":
+        data: "joined value"}
+
+        """.data(using: .utf8)!
+        MockSSEURLProtocol.mockData = sseData
+
+        let client = makeClient()
+        let events = await collectEvents(from: client)
+
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events[0].type, .textDelta)
+        XCTAssertEqual(events[0].content, "joined value")
+    }
+
     // MARK: - Tool Call
 
     func testParseToolCall() async {
         let sseData = """
-        event: tool_call
+        event: tool.call
         data: {"tool_name": "get_weather", "tool_input": "{\\"location\\": \\"NYC\\"}"}
 
         """.data(using: .utf8)!
@@ -104,7 +125,7 @@ final class SSEClientTests: XCTestCase {
 
     func testParseToolResult() async {
         let sseData = """
-        event: tool_result
+        event: tool.result
         data: {"tool_name": "get_weather", "tool_output": "72°F, sunny"}
 
         """.data(using: .utf8)!
@@ -124,7 +145,7 @@ final class SSEClientTests: XCTestCase {
 
     func testParseRunCompleted() async {
         let sseData = """
-        event: run_completed
+        event: run.completed
         data: {}
 
         """.data(using: .utf8)!
@@ -141,7 +162,7 @@ final class SSEClientTests: XCTestCase {
 
     func testParseRunFailed() async {
         let sseData = """
-        event: run_failed
+        event: run.failed
         data: {"error": "Model API quota exceeded"}
 
         """.data(using: .utf8)!
@@ -159,13 +180,13 @@ final class SSEClientTests: XCTestCase {
 
     func testParseMultipleEvents() async {
         let sseData = """
-        event: text_delta
+        event: message.delta
         data: {"content": "Hello"}
 
-        event: text_delta
+        event: message.delta
         data: {"content": " world"}
 
-        event: run_completed
+        event: run.completed
         data: {}
 
         """.data(using: .utf8)!
