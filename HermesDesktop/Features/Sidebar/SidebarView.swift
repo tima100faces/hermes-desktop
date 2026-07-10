@@ -43,10 +43,8 @@ struct SidebarView: View {
                                     ? Color.hkAccent.opacity(0.15)
                                     : Color.clear
                             )
-                            .contextMenu {
-                                Button("Delete", role: .destructive) {
-                                    viewModel.requestDelete(project)
-                                }
+                        .contextMenu {
+                                contextMenuActions(for: project)
                             }
                     }
                 }
@@ -113,6 +111,15 @@ struct SidebarView: View {
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func contextMenuActions(for project: Project) -> some View {
+        Button("Delete", role: .destructive) {
+            viewModel.requestDelete(project)
+        }
+    }
 }
 
 // MARK: - Preview
@@ -130,7 +137,7 @@ struct SidebarView: View {
     context.insert(project)
     try? context.save()
 
-    return SidebarView(onSelectProject: { _ in })
+    SidebarView(onSelectProject: { _ in })
         .modelContainer(container)
         .frame(width: 240, height: 400)
 }
