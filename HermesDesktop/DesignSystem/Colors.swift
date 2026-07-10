@@ -66,12 +66,12 @@ public extension Color {
 
     /// Page background — near-black canvas (oklch 9%).
     static let hkPage     = oklchToColor(lightness: 0.09, chroma: 0.004, hue: 270)
-    /// Panel / sidebar background (oklch 11%).
-    static let hkPanel    = oklchToColor(lightness: 0.11, chroma: 0.006, hue: 270)
-    /// Card / surface background (oklch 16%).
-    static let hkSurface  = oklchToColor(lightness: 0.16, chroma: 0.008, hue: 270)
-    /// Elevated surface (oklch 20%).
-    static let hkSurface2 = oklchToColor(lightness: 0.20, chroma: 0.010, hue: 270)
+    /// Panel / sidebar background (oklch 18%).
+    static let hkPanel    = oklchToColor(lightness: 0.18, chroma: 0.006, hue: 270)
+    /// Card / surface background (oklch 22%).
+    static let hkSurface  = oklchToColor(lightness: 0.22, chroma: 0.008, hue: 270)
+    /// Elevated surface (oklch 26%).
+    static let hkSurface2 = oklchToColor(lightness: 0.26, chroma: 0.010, hue: 270)
 
     // MARK: - Borders & Dividers (semi-transparent, Linear-style)
 
