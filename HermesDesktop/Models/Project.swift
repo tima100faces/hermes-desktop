@@ -8,7 +8,7 @@ import SwiftData
 /// Maps to a Hermes "conversation" param in the Runs API.
 /// Each project owns its messages with cascade delete.
 @Model
-final class Project {
+public final class Project {
     /// Display name for the sidebar.
     var name: String
 

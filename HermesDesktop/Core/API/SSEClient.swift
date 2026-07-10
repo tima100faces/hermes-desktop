@@ -45,6 +45,12 @@ public actor SSEClient {
         self.decoder = JSONDecoder()
     }
 
+    /// Creates an SSEClient with a custom URLSession (for testing).
+    public init(session: URLSession) {
+        self.session = session
+        self.decoder = JSONDecoder()
+    }
+
     // MARK: - Connect
 
     /// Opens an SSE connection and returns an `AsyncStream` of `RunEvent` values.

@@ -44,7 +44,7 @@ final class ChatViewModel {
     // MARK: - Dependencies
 
     /// The Hermes Runs API client (actor).
-    private let runsAPI: RunsAPI
+    private let runsAPI: RunsAPIProtocol
 
     /// The project this chat session belongs to.
     private let project: Project
@@ -57,9 +57,9 @@ final class ChatViewModel {
     /// Creates a new `ChatViewModel` bound to a project.
     ///
     /// - Parameters:
-    ///   - runsAPI: The `RunsAPI` actor used for create/stream/stop operations.
+    ///   - runsAPI: The `RunsAPIProtocol` actor used for create/stream/stop operations.
     ///   - project: The `Project` whose messages are managed.
-    init(runsAPI: RunsAPI, project: Project) {
+    init(runsAPI: RunsAPIProtocol, project: Project) {
         self.runsAPI = runsAPI
         self.project = project
     }
@@ -72,8 +72,9 @@ final class ChatViewModel {
     ///
     /// - Parameter context: The SwiftData `ModelContext` to fetch from.
     func loadMessages(context: ModelContext) {
+        let key = project.conversationKey
         let descriptor = FetchDescriptor<Message>(
-            predicate: #Predicate { $0.project?.conversationKey == project.conversationKey },
+            predicate: #Predicate { $0.project?.conversationKey == key },
             sortBy: [SortDescriptor(\.timestamp)]
         )
         if let loaded = try? context.fetch(descriptor) {

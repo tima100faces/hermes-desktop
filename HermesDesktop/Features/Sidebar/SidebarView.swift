@@ -124,20 +124,20 @@ struct SidebarView: View {
 
 // MARK: - Preview
 
-#Preview {
+// MARK: - Preview Helpers
+
+@MainActor
+private let previewContainer: ModelContainer = {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Project.self,
-        configurations: config
-    )
-
-    // Seed one project
-    let context = container.mainContext
+    let container = try! ModelContainer(for: Project.self, configurations: config)
     let project = Project(name: "Sample Project", conversationKey: "sample-project")
-    context.insert(project)
-    try? context.save()
+    container.mainContext.insert(project)
+    try? container.mainContext.save()
+    return container
+}()
 
+#Preview {
     SidebarView(onSelectProject: { _ in })
-        .modelContainer(container)
+        .modelContainer(previewContainer)
         .frame(width: 240, height: 400)
 }

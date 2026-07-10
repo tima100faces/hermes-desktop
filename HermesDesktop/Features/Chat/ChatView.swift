@@ -22,8 +22,8 @@ struct ChatView: View {
 
     // MARK: Initializer
 
-    init(project: Project, runsAPI: RunsAPI) {
-        _viewModel = State(initialValue: ChatViewModel(project: project, runsAPI: runsAPI))
+    init(project: Project, runsAPI: RunsAPIProtocol) {
+        _viewModel = State(initialValue: ChatViewModel(runsAPI: runsAPI, project: project))
     }
 
     // MARK: Body
@@ -172,7 +172,7 @@ struct ChatView: View {
     }
 
     private func stopStreaming() {
-        Task { await viewModel.stopStreaming() }
+        Task { viewModel.stopStreaming(context: modelContext) }
     }
 }
 
@@ -288,13 +288,7 @@ struct AgentStatusRow: View {
 // MARK: - Preview
 
 #Preview("Chat View") {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Project.self, Message.self, configurations: config)
-    let project = Project(name: "Preview", conversationKey: "preview")
-    container.mainContext.insert(project)
-    // Note: RunsAPI requires a HermesAPIClient — stub as needed.
-    // let runsAPI = RunsAPI(apiClient: ...)
-    // ChatView(project: project, runsAPI: runsAPI)
-    Text("ChatView — open in app to test")
+    Text("ChatView — open in app with a configured project to test")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
 }

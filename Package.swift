@@ -17,7 +17,13 @@ let package = Package(
         .executableTarget(
             name: "HermesDesktop",
             path: "HermesDesktop",
+            exclude: ["Tests"],
             resources: []
-        )
+        ),
+        .testTarget(
+            name: "HermesDesktopTests",
+            dependencies: ["HermesDesktop"],
+            path: "Tests/HermesDesktopTests"
+        ),
     ]
 )

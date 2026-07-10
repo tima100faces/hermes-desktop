@@ -22,7 +22,7 @@ public enum RunEventType: String, Codable, Sendable {
 ///
 /// Not stored in SwiftData — used ephemerally during streaming.
 public struct RunEvent: Identifiable, Equatable, Sendable {
-    let id: UUID
+    public var id: UUID
     let type: RunEventType
     let content: String?
     let toolName: String?

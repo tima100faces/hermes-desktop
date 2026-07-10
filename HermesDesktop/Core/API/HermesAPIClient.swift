@@ -26,14 +26,19 @@ public actor HermesAPIClient {
     /// - Parameters:
     ///   - baseURL: The base URL for the Hermes API.
     ///   - keychainManager: A `KeychainManager` instance for token retrieval.
-    public init(baseURL: URL, keychainManager: KeychainManager) {
+    ///   - session: A custom URLSession (defaults to a new session with 30s timeout).
+    public init(baseURL: URL, keychainManager: KeychainManager, session: URLSession? = nil) {
         self.baseURL = baseURL
         self.keychainManager = keychainManager
 
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 30
-        self.session = URLSession(configuration: configuration)
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 30
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     // MARK: - Public API

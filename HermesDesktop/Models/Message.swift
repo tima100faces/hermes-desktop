@@ -8,7 +8,7 @@ import SwiftData
 /// Stores the Markdown body, role (user / assistant / tool), and an optional
 /// reference to the Hermes run that produced it.
 @Model
-final class Message {
+public final class Message {
     /// Message body in Markdown format.
     var content: String
 

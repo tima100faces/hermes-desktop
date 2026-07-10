@@ -46,7 +46,7 @@ struct MarkdownRenderer: View {
         if let attributed = try? AttributedString(
             markdown: text,
             options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .fullyParsed
+                interpretedSyntax: .inlineOnlyPreservingWhitespace
             )
         ) {
             Text(attributed)
@@ -61,17 +61,16 @@ struct MarkdownRenderer: View {
     @ViewBuilder
     private var hybridContent: some View {
         let segments = parseFencedCodeBlocks(text)
-
         VStack(alignment: .leading, spacing: Space.sm) {
-            ForEach(segments.indices, id: \.self) { index in
-                switch segments[index] {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
                 case .code(let code):
                     codeBlockView(code)
                 case .markdown(let md):
                     if let attributed = try? AttributedString(
                         markdown: md,
                         options: AttributedString.MarkdownParsingOptions(
-                            interpretedSyntax: .fullyParsed
+                            interpretedSyntax: .inlineOnlyPreservingWhitespace
                         )
                     ) {
                         Text(attributed)

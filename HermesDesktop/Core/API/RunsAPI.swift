@@ -78,6 +78,31 @@ public struct RunStatus: Decodable, Sendable {
     }
 }
 
+// MARK: - RunsAPIProtocol
+
+/// Protocol abstraction over the Hermes Runs API for testability.
+///
+/// Conforming types must be `Actor`-isolated for Swift 6 concurrency.
+public protocol RunsAPIProtocol: Actor {
+    /// Creates a new agent run.
+    /// - Parameters:
+    ///   - input: The input text / prompt for the agent.
+    ///   - conversation: An optional conversation identifier.
+    /// - Returns: A `RunResponse` containing the new `runId` and initial status.
+    /// - Throws: `APIError` or a transport error.
+    func createRun(input: String, conversation: String?) async throws -> RunResponse
+
+    /// Opens an SSE stream of events for a run.
+    /// - Parameter runId: The ID of the run to stream.
+    /// - Returns: An unbounded `AsyncStream<RunEvent>`.
+    func streamEvents(runId: String) async -> AsyncStream<RunEvent>
+
+    /// Stops a running agent.
+    /// - Parameter runId: The ID of the run to stop.
+    /// - Throws: `APIError` or a transport error.
+    func stopRun(runId: String) async throws
+}
+
 // MARK: - RunsAPI
 
 /// High-level API for creating and managing Hermes agent runs.
@@ -98,7 +123,7 @@ public struct RunStatus: Decodable, Sendable {
 ///     // handle event
 /// }
 /// ```
-public actor RunsAPI {
+public actor RunsAPI: RunsAPIProtocol {
 
     // MARK: - Properties
 
