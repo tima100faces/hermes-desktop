@@ -146,7 +146,7 @@ struct ChatView: View {
 
     // MARK: - Header
 
-    /// Topic title bar with a live subagent badge.
+    /// Chat title bar with a live subagent badge.
     private var header: some View {
         HStack {
             Text(title)

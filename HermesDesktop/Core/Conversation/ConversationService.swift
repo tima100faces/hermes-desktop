@@ -3,15 +3,16 @@ import SwiftData
 
 // MARK: - ConversationService
 //
-// Unifies `Topic` (Runs API) and `Chat` (Sessions API) behind one
-// interface so `ChatViewModel` / `ChatView` never need to know which
-// transport backs the conversation on screen
-// (docs/task-topics-and-chats.md §Этап 2). Event-dialect translation for
-// each transport happens in exactly one place: `SSEClient` (Runs) and
-// `SessionSSEClient` (Sessions) both yield the same `RunEvent` shape.
+// Unifies a `Chat`'s two possible transports — Runs API (pinned, migrated
+// from the old `Topic` entity) and Sessions API — behind one interface so
+// `ChatViewModel` / `ChatView` never need to know which one backs the chat
+// on screen. Event-dialect translation for each transport happens in
+// exactly one place: `SSEClient` (Runs) and `SessionSSEClient` (Sessions)
+// both yield the same `RunEvent` shape.
 
-/// A single active conversation — either a `Topic` or a `Chat` — exposed
-/// through one shape so the chat UI is transport-agnostic.
+/// A single active `Chat` — exposed through one shape so the chat UI is
+/// transport-agnostic, regardless of whether it's `RunsConversationService`
+/// or `SessionsConversationService` underneath.
 @MainActor
 public protocol ConversationService: AnyObject {
 
@@ -22,11 +23,11 @@ public protocol ConversationService: AnyObject {
 
     /// Loads existing messages for this conversation.
     ///
-    /// Topics read from local SwiftData — the Runs API has no history
-    /// endpoint, so local storage has always been the source of truth.
-    /// Chats fetch fresh from the server (`GET /api/sessions/{id}/messages`)
-    /// since the server is authoritative there; the local cache is
-    /// secondary.
+    /// Runs-backed chats read from local SwiftData — the Runs API has no
+    /// history endpoint, so local storage has always been the source of
+    /// truth. Sessions-backed chats fetch fresh from the server
+    /// (`GET /api/sessions/{id}/messages`) since the server is
+    /// authoritative there; the local cache is secondary.
     func loadMessages(context: ModelContext) async -> [Message]
 
     /// Persists a new message against this conversation's owner and bumps
@@ -44,7 +45,7 @@ public protocol ConversationService: AnyObject {
 
     /// Called once, right after the very first user message of a brand
     /// new conversation is persisted, so implementations that support
-    /// server-side titles can auto-title from it. Topics ignore this —
-    /// their titles are user-set only.
+    /// server-side titles can auto-title from it. Runs-backed chats ignore
+    /// this — their titles are user-set only.
     func autoTitleIfNeeded(from firstMessageText: String, context: ModelContext) async
 }

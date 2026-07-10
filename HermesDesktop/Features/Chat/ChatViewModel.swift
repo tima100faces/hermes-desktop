@@ -7,10 +7,10 @@ import Observation
 /// ViewModel for the main chat interface.
 ///
 /// Transport-agnostic: talks only to a `ConversationService`, which hides
-/// whether the conversation on screen is a `Topic` (Runs API) or a `Chat`
-/// (Sessions API) — see `docs/task-topics-and-chats.md` §Этап 2. Manages
-/// message persistence and real-time agent status badges; all properties
-/// are `@Observable`-driven so the SwiftUI view layer reacts automatically.
+/// whether the chat on screen is Runs API-backed (pinned, migrated from
+/// the old `Topic` entity) or Sessions API-backed. Manages message
+/// persistence and real-time agent status badges; all properties are
+/// `@Observable`-driven so the SwiftUI view layer reacts automatically.
 ///
 /// ## Responsibilities
 /// - Sending user messages and consuming the unified `RunEvent` stream
@@ -44,15 +44,14 @@ final class ChatViewModel {
 
     // MARK: - Dependencies
 
-    /// The conversation this view model is driving — a `Topic` or `Chat`
-    /// behind a shared interface.
+    /// The chat this view model is driving, behind a shared interface.
     private let conversationService: ConversationService
 
     // MARK: - Initialization
 
     /// Creates a new `ChatViewModel` bound to a conversation.
     ///
-    /// - Parameter conversationService: The `Topic`- or `Chat`-backed
+    /// - Parameter conversationService: The Runs- or Sessions-backed
     ///   service driving this conversation.
     init(conversationService: ConversationService) {
         self.conversationService = conversationService
@@ -202,9 +201,10 @@ final class ChatViewModel {
     ///
     /// - Parameter context: The SwiftData `ModelContext` for persistence.
     func stopStreaming(context: ModelContext) {
-        // Fire-and-forget the stop request. For Topics this asks the server
-        // to cancel the run; for Chats (no server-side stop endpoint) this
-        // terminates the local stream so no further events are read —
+        // Fire-and-forget the stop request. For Runs-backed chats this asks
+        // the server to cancel the run; for Sessions-backed chats (no
+        // server-side stop endpoint) this terminates the local stream so
+        // no further events are read —
         // either way `sendMessage`'s `for await` loop ends shortly after.
         Task {
             await conversationService.stop()

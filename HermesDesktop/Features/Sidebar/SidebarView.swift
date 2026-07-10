@@ -7,11 +7,11 @@ import SwiftData
 // HStack (not NavigationSplitView) so macOS system materials never
 // override the hkPanel background.
 //
-// Two sections, Чаты above Темы (docs/task-topics-and-chats.md §Этап 2).
-// Both lists are ScrollView + buttons, NOT List: the native macOS List
-// draws its own full-width selection highlight on top of
-// listRowBackground, which is impossible to disable cleanly. Do not
-// convert this back to List.
+// Two sections: "Закреплённые" (only shown when at least one chat is
+// pinned) above "Чаты" (docs/UI-SPEC.md §9). Both lists are
+// ScrollView + buttons, NOT List: the native macOS List draws its own
+// full-width selection highlight on top of listRowBackground, which is
+// impossible to disable cleanly. Do not convert this back to List.
 
 struct SidebarView: View {
 
@@ -19,17 +19,12 @@ struct SidebarView: View {
     /// and the unconfigured state work without one.
     var connectionMonitor: ConnectionMonitor?
 
-    /// The app's single source of truth for which conversation is active —
-    /// shared with ContentView so the sidebar highlight stays in sync
-    /// regardless of how the selection changed (sidebar click, Cmd+K
-    /// palette, etc).
-    @Binding var selection: ConversationSelection?
+    /// The app's single source of truth for which chat is active — shared
+    /// with ContentView so the sidebar highlight stays in sync regardless
+    /// of how the selection changed (sidebar click, Cmd+K palette, etc).
+    @Binding var selection: Chat?
 
-    @State private var viewModel = SidebarViewModel()
     @State private var chatViewModel: ChatSidebarViewModel
-
-    /// The topic currently under the pointer — reveals its "…" menu.
-    @State private var hoveredTopic: Topic?
 
     /// The chat currently under the pointer — reveals its "…" menu.
     @State private var hoveredChat: Chat?
@@ -40,14 +35,19 @@ struct SidebarView: View {
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
 
-    @Query(sort: \Topic.lastActiveAt, order: .reverse)
-    private var topics: [Topic]
-
     @Environment(\.modelContext) private var modelContext
+
+    private var pinnedChats: [Chat] {
+        chats.filter(\.isPinned)
+    }
+
+    private var regularChats: [Chat] {
+        chats.filter { !$0.isPinned }
+    }
 
     init(
         connectionMonitor: ConnectionMonitor?,
-        selection: Binding<ConversationSelection?>,
+        selection: Binding<Chat?>,
         sessionsAPI: SessionsAPIProtocol
     ) {
         self.connectionMonitor = connectionMonitor
@@ -63,23 +63,21 @@ struct SidebarView: View {
 
             ScrollView {
                 LazyVStack(spacing: 2) {
+                    if !pinnedChats.isEmpty {
+                        sectionHeader(title: "Закреплённые")
+                        ForEach(pinnedChats) { chat in
+                            chatRow(chat)
+                        }
+                    }
+
                     sectionHeader(
                         title: "Чаты",
                         help: "Новый чат",
                         action: { Task { await createChat() } }
                     )
-                    ForEach(chats) { chat in
+                    .padding(.top, pinnedChats.isEmpty ? 0 : Space.sm)
+                    ForEach(regularChats) { chat in
                         chatRow(chat)
-                    }
-
-                    sectionHeader(
-                        title: "Темы",
-                        help: "Новая тема",
-                        action: { viewModel.isCreatingTopic = true }
-                    )
-                    .padding(.top, Space.sm)
-                    ForEach(topics) { topic in
-                        topicRow(topic)
                     }
                 }
                 .padding(.horizontal, Space.sm)
@@ -107,29 +105,15 @@ struct SidebarView: View {
             .help(statusHelp)
         }
         .background(Color.hkPanel)
-        .sheet(isPresented: $viewModel.isCreatingTopic) {
-            CreateTopicSheet(viewModel: viewModel, modelContext: modelContext, selection: $selection)
-        }
-        .sheet(isPresented: $viewModel.isRenamingTopic) {
-            RenameTopicSheet(viewModel: viewModel, modelContext: modelContext)
-        }
         .sheet(isPresented: $chatViewModel.isRenamingChat) {
             RenameChatSheet(viewModel: chatViewModel, modelContext: modelContext)
-        }
-        .alert("Удалить тему?", isPresented: $viewModel.showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
-            Button("Delete", role: .destructive) {
-                viewModel.confirmDelete(context: modelContext, selection: &selection)
-            }
-        } message: {
-            Text("Тема и вся переписка будут удалены навсегда.")
         }
         .alert("Удалить чат?", isPresented: $chatViewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { chatViewModel.cancelDelete() }
             Button("Delete", role: .destructive) {
                 Task {
                     let deleted = await chatViewModel.confirmDelete(context: modelContext)
-                    if case .chat(let selected) = selection, selected == deleted {
+                    if let deleted, selection == deleted {
                         selection = nil
                     }
                 }
@@ -138,26 +122,17 @@ struct SidebarView: View {
             Text("Чат будет удалён навсегда.")
         }
         .onAppear {
-            // Auto-open the most recently active conversation on launch, so
-            // the app starts in a chat instead of the empty placeholder
-            // (docs/UI-SPEC.md §9) — whichever of the two lists is freshest.
+            // Auto-open the most recently active chat on launch, so the
+            // app starts in a chat instead of the empty placeholder
+            // (docs/UI-SPEC.md §9).
             guard selection == nil else { return }
-            switch (chats.first, topics.first) {
-            case (let chat?, let topic?):
-                selection = chat.lastActiveAt > topic.lastActiveAt ? .chat(chat) : .topic(topic)
-            case (let chat?, nil):
-                selection = .chat(chat)
-            case (nil, let topic?):
-                selection = .topic(topic)
-            case (nil, nil):
-                break
-            }
+            selection = chats.first
         }
     }
 
     // MARK: - Section Header
 
-    private func sectionHeader(title: String, help: String, action: @escaping () -> Void) -> some View {
+    private func sectionHeader(title: String, help: String? = nil, action: (() -> Void)? = nil) -> some View {
         HStack {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
@@ -165,14 +140,16 @@ struct SidebarView: View {
                 .foregroundStyle(Color.hkNeutral)
                 .textCase(.uppercase)
             Spacer()
-            Button(action: action) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.hkNeutral)
-                    .frame(width: 22, height: 22)
+            if let action {
+                Button(action: action) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.hkNeutral)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help(help ?? "")
             }
-            .buttonStyle(.plain)
-            .help(help)
         }
         .padding(.horizontal, Space.sm)
         .padding(.bottom, Space.sm)
@@ -180,51 +157,22 @@ struct SidebarView: View {
 
     // MARK: - Rows
 
-    private func topicRow(_ topic: Topic) -> some View {
+    private func chatRow(_ chat: Chat) -> some View {
         HStack(spacing: 0) {
             Button {
-                selection = .topic(topic)
+                selection = chat
             } label: {
-                TopicRow(topic: topic, isSelected: selection == .topic(topic))
+                ChatRow(chat: chat, isSelected: selection == chat)
             }
             .buttonStyle(.plain)
 
             // Sibling of the selection Button (not nested in its label) so
             // the menu stays clickable.
-            if hoveredTopic == topic {
-                ConversationMenuButton(
-                    onRename: { viewModel.requestRename(topic) },
-                    onDelete: { viewModel.requestDelete(topic) },
-                    help: "Действия с темой"
-                )
-                .padding(.trailing, Space.xs)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selection == .topic(topic) ? Color.hkAccentDim : Color.clear)
-        )
-        .onHover { hovering in
-            hoveredTopic = hovering ? topic : (hoveredTopic == topic ? nil : hoveredTopic)
-        }
-        .contextMenu {
-            Button("Rename") { viewModel.requestRename(topic) }
-            Button("Delete", role: .destructive) { viewModel.requestDelete(topic) }
-        }
-    }
-
-    private func chatRow(_ chat: Chat) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                selection = .chat(chat)
-            } label: {
-                ChatRow(chat: chat, isSelected: selection == .chat(chat))
-            }
-            .buttonStyle(.plain)
-
             if hoveredChat == chat {
                 ConversationMenuButton(
+                    isPinned: chat.isPinned,
                     onRename: { chatViewModel.requestRename(chat) },
+                    onTogglePin: { chatViewModel.togglePin(chat, context: modelContext) },
                     onDelete: { chatViewModel.requestDelete(chat) },
                     help: "Действия с чатом"
                 )
@@ -233,13 +181,16 @@ struct SidebarView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selection == .chat(chat) ? Color.hkAccentDim : Color.clear)
+                .fill(selection == chat ? Color.hkAccentDim : Color.clear)
         )
         .onHover { hovering in
             hoveredChat = hovering ? chat : (hoveredChat == chat ? nil : hoveredChat)
         }
         .contextMenu {
             Button("Rename") { chatViewModel.requestRename(chat) }
+            Button(chat.isPinned ? "Открепить" : "Закрепить") {
+                chatViewModel.togglePin(chat, context: modelContext)
+            }
             Button("Delete", role: .destructive) { chatViewModel.requestDelete(chat) }
         }
     }
@@ -248,7 +199,7 @@ struct SidebarView: View {
 
     private func createChat() async {
         if let chat = await chatViewModel.createChat(context: modelContext) {
-            selection = .chat(chat)
+            selection = chat
         }
     }
 
@@ -286,9 +237,9 @@ struct SidebarView: View {
 @MainActor
 private let previewContainer: ModelContainer = {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Topic.self, Chat.self, configurations: config)
-    let topic = Topic(name: "Sample Topic", conversationKey: "sample-topic")
-    container.mainContext.insert(topic)
+    let container = try! ModelContainer(for: Chat.self, configurations: config)
+    let chat = Chat(conversationKey: "sample-topic", title: "Sample Topic", isPinned: true)
+    container.mainContext.insert(chat)
     try? container.mainContext.save()
     return container
 }()

@@ -73,30 +73,30 @@ final class ChatViewModelTests: XCTestCase {
     var modelContainer: ModelContainer!
     var modelContext: ModelContext!
     var mockRunsAPI: MockRunsAPI!
-    var topic: Topic!
+    var chat: Chat!
     var viewModel: ChatViewModel!
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Topic.self, Message.self,
+            for: Chat.self, Message.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
 
         mockRunsAPI = MockRunsAPI()
 
-        topic = Topic(name: "Test Topic", conversationKey: "test-topic")
-        modelContext.insert(topic)
+        chat = Chat(conversationKey: "test-topic", title: "Test Topic", isPinned: true)
+        modelContext.insert(chat)
         try modelContext.save()
 
-        viewModel = ChatViewModel(conversationService: TopicConversationService(runsAPI: mockRunsAPI, topic: topic))
+        viewModel = ChatViewModel(conversationService: RunsConversationService(runsAPI: mockRunsAPI, chat: chat))
     }
 
     override func tearDown() async throws {
         // Tear down in reverse order.
         viewModel = nil
-        topic = nil
+        chat = nil
         mockRunsAPI = nil
         modelContext = nil
         modelContainer = nil
@@ -419,11 +419,11 @@ final class ChatViewModelTests: XCTestCase {
     func testLoadMessagesFetchesFromSwiftData() async throws {
         // Arrange — insert messages directly into SwiftData
         let msg1 = Message(content: "First", role: .user)
-        msg1.topic = topic
+        msg1.chat = chat
         modelContext.insert(msg1)
 
         let msg2 = Message(content: "Second", role: .assistant)
-        msg2.topic = topic
+        msg2.chat = chat
         modelContext.insert(msg2)
 
         try modelContext.save()
@@ -437,17 +437,17 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages[1].content, "Second")
     }
 
-    func testLoadMessagesOnlyFetchesForCurrentTopic() async throws {
-        // Arrange — insert messages for the current topic
+    func testLoadMessagesOnlyFetchesForCurrentChat() async throws {
+        // Arrange — insert messages for the current chat
         let msg = Message(content: "Mine", role: .user)
-        msg.topic = topic
+        msg.chat = chat
         modelContext.insert(msg)
 
-        // Insert a message for a different topic
-        let otherTopic = Topic(name: "Other", conversationKey: "other")
-        modelContext.insert(otherTopic)
+        // Insert a message for a different chat
+        let otherChat = Chat(conversationKey: "other", title: "Other", isPinned: true)
+        modelContext.insert(otherChat)
         let otherMsg = Message(content: "Not mine", role: .user)
-        otherMsg.topic = otherTopic
+        otherMsg.chat = otherChat
         modelContext.insert(otherMsg)
 
         try modelContext.save()

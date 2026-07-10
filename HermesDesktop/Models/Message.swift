@@ -21,11 +21,7 @@ public final class Message {
     /// The Hermes run ID that produced this message (nil for user messages).
     var runId: String?
 
-    /// The topic this message belongs to (Runs API conversations).
-    var topic: Topic?
-
-    /// The chat this message belongs to (Sessions API conversations).
-    /// A message has at most one of `topic` / `chat` set — never both.
+    /// The chat this message belongs to.
     var chat: Chat?
 
     // MARK: - Role

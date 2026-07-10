@@ -14,13 +14,12 @@ private extension Logger {
 // Sessions API's SSE dialect (`assistant.delta`, `tool.started`,
 // `tool.completed`, `run.completed`) into the same `RunEvent`/
 // `RunEventType` shape the Runs API dialect uses in `SSEClient`, so
-// `ChatViewModel` never needs to know which transport produced an event
-// (docs/task-topics-and-chats.md §Этап 2).
+// `ChatViewModel` never needs to know which transport produced an event.
 //
 // The low-level byte-stream framing here is intentionally a separate,
 // small duplicate of `SSEClient`'s (rather than a shared refactor) to
 // avoid any risk of regressing the already-working Runs API streaming
-// path used by existing Topics.
+// path used by pinned chats.
 //
 // NOTE: the exact JSON field names the Sessions dialect uses for tool
 // events are inferred (reusing the Runs dialect's field names), not

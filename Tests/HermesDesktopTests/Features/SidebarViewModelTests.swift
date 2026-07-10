@@ -2,6 +2,57 @@ import XCTest
 import SwiftData
 @testable import HermesDesktop
 
+// MARK: - MockSessionsAPI
+
+/// Controlled mock of the Hermes Sessions API for `ChatSidebarViewModel` tests.
+actor MockSessionsAPI: SessionsAPIProtocol {
+
+    var createSessionResult: Result<SessionInfo, Error> = .success(SessionInfo(id: "session-1", title: nil))
+    var renameSessionResult: Result<SessionInfo, Error> = .success(SessionInfo(id: "session-1", title: "Renamed"))
+    var deleteSessionError: Error?
+
+    private(set) var deletedSessionIds: [String] = []
+    private(set) var renamedSessionIds: [String] = []
+
+    func createSession() async throws -> SessionInfo {
+        try createSessionResult.get()
+    }
+
+    func getSession(id: String) async throws -> SessionInfo {
+        SessionInfo(id: id, title: nil)
+    }
+
+    func renameSession(id: String, title: String) async throws -> SessionInfo {
+        renamedSessionIds.append(id)
+        return try renameSessionResult.get()
+    }
+
+    func deleteSession(id: String) async throws {
+        if let error = deleteSessionError { throw error }
+        deletedSessionIds.append(id)
+    }
+
+    func getMessages(sessionId: String) async throws -> [SessionMessage] { [] }
+
+    func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+        (AsyncStream { $0.finish() }, {})
+    }
+
+    // MARK: Test Helpers
+
+    func setCreateSessionToFail() {
+        createSessionResult = .failure(
+            NSError(domain: "mock", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network error"])
+        )
+    }
+
+    func setRenameSessionToFail() {
+        renameSessionResult = .failure(
+            NSError(domain: "mock", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network error"])
+        )
+    }
+}
+
 // MARK: - SidebarViewModelTests
 
 @MainActor
@@ -11,318 +62,251 @@ final class SidebarViewModelTests: XCTestCase {
 
     var modelContainer: ModelContainer!
     var modelContext: ModelContext!
-    var viewModel: SidebarViewModel!
-    var selection: ConversationSelection?
-
-    /// Convenience accessor for assertions — `nil` unless `selection` is `.topic`.
-    var selectedTopic: Topic? {
-        if case .topic(let topic)? = selection { return topic }
-        return nil
-    }
+    var mockSessionsAPI: MockSessionsAPI!
+    var viewModel: ChatSidebarViewModel!
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Topic.self, Message.self,
+            for: Chat.self, Message.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
 
-        viewModel = SidebarViewModel()
-        selection = nil
+        mockSessionsAPI = MockSessionsAPI()
+        viewModel = ChatSidebarViewModel(sessionsAPI: mockSessionsAPI)
     }
 
     override func tearDown() async throws {
         viewModel = nil
+        mockSessionsAPI = nil
         modelContext = nil
         modelContainer = nil
-        selection = nil
     }
 
-    // MARK: - Create Topic
+    // MARK: - Create Chat
 
-    func testCreateTopicInsertsIntoSwiftData() throws {
-        // Arrange
-        viewModel.newTopicName = "My Topic"
-
+    func testCreateChatInsertsSessionsBackedChat() async throws {
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        let chat = await viewModel.createChat(context: modelContext)
 
-        // Assert — topic persisted
-        let descriptor = FetchDescriptor<Topic>()
-        let topics = try modelContext.fetch(descriptor)
+        // Assert — chat persisted, Sessions-backed, unpinned
+        let descriptor = FetchDescriptor<Chat>()
+        let chats = try modelContext.fetch(descriptor)
 
-        XCTAssertEqual(topics.count, 1)
-        XCTAssertEqual(topics[0].name, "My Topic")
+        XCTAssertEqual(chats.count, 1)
+        XCTAssertEqual(chat?.sessionId, "session-1")
+        XCTAssertNil(chat?.conversationKey)
+        XCTAssertFalse(chat?.isPinned ?? true)
     }
 
-    func testCreateTopicSetsSelectedTopic() {
+    func testCreateChatFailureSetsErrorAndReturnsNil() async throws {
         // Arrange
-        viewModel.newTopicName = "My Topic"
+        await mockSessionsAPI.setCreateSessionToFail()
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        let chat = await viewModel.createChat(context: modelContext)
 
         // Assert
-        XCTAssertNotNil(selectedTopic)
-        XCTAssertEqual(selectedTopic?.name, "My Topic")
+        XCTAssertNil(chat)
+        XCTAssertNotNil(viewModel.errorMessage)
+
+        let descriptor = FetchDescriptor<Chat>()
+        let chats = try modelContext.fetch(descriptor)
+        XCTAssertTrue(chats.isEmpty)
     }
 
-    func testCreateTopicClearsNameAndDismissesSheet() {
-        // Arrange
-        viewModel.newTopicName = "My Topic"
-        viewModel.isCreatingTopic = true
+    // MARK: - Toggle Pin
+
+    func testTogglePinFlipsIsPinned() {
+        // Arrange — a pinned, Runs-backed chat (as migrated from Topic)
+        let chat = Chat(conversationKey: "legacy", title: "Legacy", isPinned: true)
+        modelContext.insert(chat)
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        viewModel.togglePin(chat, context: modelContext)
 
         // Assert
-        XCTAssertTrue(viewModel.newTopicName.isEmpty)
-        XCTAssertFalse(viewModel.isCreatingTopic)
+        XCTAssertFalse(chat.isPinned)
+
+        // Act again — toggles back
+        viewModel.togglePin(chat, context: modelContext)
+        XCTAssertTrue(chat.isPinned)
     }
 
-    func testCreateTopicEmptyNameShowsError() {
-        // Arrange — empty name
-        viewModel.newTopicName = ""
+    func testTogglePinWorksForSessionsBackedChat() {
+        // Arrange — a regular, unpinned Sessions-backed chat
+        let chat = Chat(sessionId: "session-2", title: "Regular")
+        modelContext.insert(chat)
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        viewModel.togglePin(chat, context: modelContext)
 
         // Assert
-        XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
-
-        // No topic should have been created
-        let descriptor = FetchDescriptor<Topic>()
-        let topics = try? modelContext.fetch(descriptor)
-        XCTAssertEqual(topics?.count ?? 0, 0)
-
-        // selection should remain nil
-        XCTAssertNil(selection)
+        XCTAssertTrue(chat.isPinned)
     }
 
-    func testCreateTopicWhitespaceNameShowsError() {
+    // MARK: - Rename
+
+    func testRenameSessionsBackedChatCallsServerAndUpdatesTitle() async throws {
         // Arrange
-        viewModel.newTopicName = "   \n  \t  "
+        let chat = Chat(sessionId: "session-1", title: "Old Title")
+        modelContext.insert(chat)
+        viewModel.requestRename(chat)
+        viewModel.renameChatName = "New Title"
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        await viewModel.confirmRename(context: modelContext)
+
+        // Assert — server called, title + auto-title flag updated locally
+        let renamedIds = await mockSessionsAPI.renamedSessionIds
+        XCTAssertEqual(renamedIds, ["session-1"])
+        XCTAssertEqual(chat.title, "New Title")
+        XCTAssertTrue(chat.hasAutoTitled)
+        XCTAssertFalse(viewModel.isRenamingChat)
+    }
+
+    func testRenameRunsBackedChatIsLocalOnly() async throws {
+        // Arrange — a pinned, Runs-backed chat (no sessionId)
+        let chat = Chat(conversationKey: "legacy", title: "Old Title", isPinned: true)
+        modelContext.insert(chat)
+        viewModel.requestRename(chat)
+        viewModel.renameChatName = "New Title"
+
+        // Act
+        await viewModel.confirmRename(context: modelContext)
+
+        // Assert — no server call, title updated locally
+        let renamedIds = await mockSessionsAPI.renamedSessionIds
+        XCTAssertTrue(renamedIds.isEmpty)
+        XCTAssertEqual(chat.title, "New Title")
+        XCTAssertFalse(viewModel.isRenamingChat)
+    }
+
+    func testRenameEmptyNameShowsError() async throws {
+        // Arrange
+        let chat = Chat(sessionId: "session-1", title: "Old Title")
+        modelContext.insert(chat)
+        viewModel.requestRename(chat)
+        viewModel.renameChatName = "   "
+
+        // Act
+        await viewModel.confirmRename(context: modelContext)
 
         // Assert
-        XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
+        XCTAssertEqual(viewModel.errorMessage, "Название чата не может быть пустым")
+        XCTAssertEqual(chat.title, "Old Title")
+        XCTAssertTrue(viewModel.isRenamingChat)
     }
 
-    // MARK: - Conversation Key Generation
-
-    func testConversationKeyGeneration() {
+    func testRenameServerFailureKeepsSheetOpenWithError() async throws {
         // Arrange
-        viewModel.newTopicName = "My Topic"
+        await mockSessionsAPI.setRenameSessionToFail()
+        let chat = Chat(sessionId: "session-1", title: "Old Title")
+        modelContext.insert(chat)
+        viewModel.requestRename(chat)
+        viewModel.renameChatName = "New Title"
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        await viewModel.confirmRename(context: modelContext)
+
+        // Assert — title unchanged, error surfaced, sheet stays open
+        XCTAssertEqual(chat.title, "Old Title")
+        XCTAssertNotNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.isRenamingChat)
+    }
+
+    func testCancelRenameClearsState() {
+        // Arrange
+        let chat = Chat(sessionId: "session-1", title: "Old Title")
+        modelContext.insert(chat)
+        viewModel.requestRename(chat)
+
+        // Act
+        viewModel.cancelRename()
 
         // Assert
-        XCTAssertEqual(selectedTopic?.conversationKey, "my-topic")
+        XCTAssertFalse(viewModel.isRenamingChat)
+        XCTAssertTrue(viewModel.renameChatName.isEmpty)
     }
 
-    func testConversationKeyStripsSpecialCharacters() {
+    // MARK: - Delete
+
+    func testDeleteSessionsBackedChatCallsServerAndRemoves() async throws {
         // Arrange
-        viewModel.newTopicName = "Hello! @World #2024"
+        let chat = Chat(sessionId: "session-1", title: "Delete Me")
+        modelContext.insert(chat)
+        try modelContext.save()
+        viewModel.requestDelete(chat)
 
         // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Assert — only lowercase alphanumeric and hyphens
-        XCTAssertEqual(selectedTopic?.conversationKey, "hello-world-2024")
-    }
-
-    func testConversationKeyHandlesMixedCase() {
-        // Arrange
-        viewModel.newTopicName = "UPPERCASE Topic"
-
-        // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        let deleted = await viewModel.confirmDelete(context: modelContext)
 
         // Assert
-        XCTAssertEqual(selectedTopic?.conversationKey, "uppercase-topic")
-    }
+        let deletedIds = await mockSessionsAPI.deletedSessionIds
+        XCTAssertEqual(deletedIds, ["session-1"])
+        XCTAssertEqual(deleted, chat)
 
-    func testConversationKeyHandlesMultipleHyphens() {
-        // Arrange
-        viewModel.newTopicName = "A   B   C"
-
-        // Act
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Assert
-        XCTAssertEqual(selectedTopic?.conversationKey, "a---b---c")
-    }
-
-    // MARK: - Delete Topic
-
-    func testDeleteTopicRemovesFromSwiftData() throws {
-        // Arrange
-        viewModel.newTopicName = "Delete Me"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        let topic = selectedTopic!
-        viewModel.requestDelete(topic)
-
-        // Act
-        viewModel.confirmDelete(context: modelContext, selection: &selection)
-
-        // Assert — topic removed
-        let descriptor = FetchDescriptor<Topic>()
-        let topics = try modelContext.fetch(descriptor)
-        XCTAssertTrue(topics.isEmpty)
-        XCTAssertNil(selection)
+        let descriptor = FetchDescriptor<Chat>()
+        let chats = try modelContext.fetch(descriptor)
+        XCTAssertTrue(chats.isEmpty)
         XCTAssertFalse(viewModel.showDeleteConfirmation)
     }
 
-    func testDeleteTopicClearsSelectionIfMatches() {
-        // Arrange
-        viewModel.newTopicName = "Target"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        let topic = selectedTopic!
-        viewModel.requestDelete(topic)
-
-        // Act
-        viewModel.confirmDelete(context: modelContext, selection: &selection)
-
-        // Assert
-        XCTAssertNil(selection)
-    }
-
-    func testDeleteTopicDoesNotClearSelectionIfDifferent() throws {
-        // Arrange — create two topics, select the second
-        viewModel.newTopicName = "First"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        viewModel.newTopicName = "Second"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Now delete the first topic
-        let descriptor = FetchDescriptor<Topic>(
-            predicate: #Predicate { $0.name == "First" }
-        )
-        let topics = try modelContext.fetch(descriptor)
-        let firstTopic = topics[0]
-
-        viewModel.requestDelete(firstTopic)
-        viewModel.confirmDelete(context: modelContext, selection: &selection)
-
-        // Assert — selection unchanged (still "Second")
-        XCTAssertEqual(selectedTopic?.name, "Second")
-    }
-
-    func testRequestDeleteShowsConfirmation() {
-        // Arrange
-        viewModel.newTopicName = "Temp"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-        let topic = selectedTopic!
+    func testDeleteRunsBackedChatIsLocalOnly() async throws {
+        // Arrange — a pinned, Runs-backed chat (no sessionId)
+        let chat = Chat(conversationKey: "legacy", title: "Delete Me", isPinned: true)
+        modelContext.insert(chat)
+        try modelContext.save()
+        viewModel.requestDelete(chat)
 
         // Act
-        viewModel.requestDelete(topic)
+        let deleted = await viewModel.confirmDelete(context: modelContext)
 
-        // Assert
-        XCTAssertTrue(viewModel.showDeleteConfirmation)
+        // Assert — no server call, still removed locally
+        let deletedIds = await mockSessionsAPI.deletedSessionIds
+        XCTAssertTrue(deletedIds.isEmpty)
+        XCTAssertEqual(deleted, chat)
+
+        let descriptor = FetchDescriptor<Chat>()
+        let chats = try modelContext.fetch(descriptor)
+        XCTAssertTrue(chats.isEmpty)
     }
 
     func testCancelDeleteHidesConfirmation() {
         // Arrange
-        viewModel.newTopicName = "Temp"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        viewModel.requestDelete(selectedTopic!)
+        let chat = Chat(sessionId: "session-1", title: "Temp")
+        modelContext.insert(chat)
+        viewModel.requestDelete(chat)
 
         // Act
         viewModel.cancelDelete()
 
         // Assert
         XCTAssertFalse(viewModel.showDeleteConfirmation)
-        // Topic still exists
-        XCTAssertNotNil(selectedTopic)
     }
 
-    func testConfirmDeleteWithoutPendingDoesNothing() throws {
+    func testConfirmDeleteWithoutPendingDoesNothing() async throws {
         // Act — no pending deletion set
-        viewModel.confirmDelete(context: modelContext, selection: &selection)
+        let deleted = await viewModel.confirmDelete(context: modelContext)
 
-        // Assert — no crash, state unchanged
+        // Assert — no crash, nothing deleted
+        XCTAssertNil(deleted)
         XCTAssertFalse(viewModel.showDeleteConfirmation)
-        XCTAssertNil(selection)
     }
 
     // MARK: - Error Handling
 
-    func testClearError() {
+    func testClearError() async throws {
         // Arrange
-        viewModel.newTopicName = ""
-        viewModel.createTopic(context: modelContext, selection: &selection)
+        await mockSessionsAPI.setCreateSessionToFail()
+        _ = await viewModel.createChat(context: modelContext)
         XCTAssertNotNil(viewModel.errorMessage)
 
         // Act
         viewModel.clearError()
 
         // Assert
-        XCTAssertNil(viewModel.errorMessage)
-    }
-
-    // MARK: - Multiple Topics
-
-    func testMultipleTopicsCreated() throws {
-        // Arrange
-        viewModel.newTopicName = "Alpha"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        viewModel.newTopicName = "Beta"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        viewModel.newTopicName = "Gamma"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Assert
-        let descriptor = FetchDescriptor<Topic>()
-        let topics = try modelContext.fetch(descriptor)
-
-        XCTAssertEqual(topics.count, 3)
-        // Last created should be selected
-        XCTAssertEqual(selectedTopic?.name, "Gamma")
-    }
-
-    func testCreateTopicPreservesExistingTopics() throws {
-        // Arrange
-        viewModel.newTopicName = "Existing"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Act
-        viewModel.newTopicName = "New"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Assert — both exist
-        let descriptor = FetchDescriptor<Topic>()
-        let topics = try modelContext.fetch(descriptor)
-        XCTAssertEqual(topics.count, 2)
-    }
-
-    // MARK: - Deletion Clears Error
-
-    func testDeleteTopicClearsError() {
-        // Arrange — trigger an error first
-        viewModel.newTopicName = ""
-        viewModel.createTopic(context: modelContext, selection: &selection)
-        XCTAssertNotNil(viewModel.errorMessage)
-
-        // Create a valid topic to delete
-        viewModel.errorMessage = nil  // clear any residual error state
-        viewModel.newTopicName = "Delete Me"
-        viewModel.createTopic(context: modelContext, selection: &selection)
-
-        // Act
-        viewModel.requestDelete(selectedTopic!)
-        viewModel.confirmDelete(context: modelContext, selection: &selection)
-
-        // Assert — deletion succeeded, no error
         XCTAssertNil(viewModel.errorMessage)
     }
 }

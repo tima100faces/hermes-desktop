@@ -3,21 +3,29 @@ import SwiftData
 
 // MARK: - Chat
 
-/// A free-form chat in Hermes Desktop — a one-off conversation backed by
-/// the Hermes Sessions API, as opposed to a `Topic` (a long-running
-/// conversation on the older Runs API).
+/// A conversation in Hermes Desktop — the single conversation entity.
 ///
-/// The list of chats shown in the sidebar is driven entirely by these
-/// local records, never by enumerating `GET /api/sessions` — that
-/// endpoint also returns Telegram sessions and, for `source=api_server`,
-/// sessions created by `Topic`'s Runs API path, which have no reliable
-/// way to be told apart from chats server-side.
+/// Backed by one of two transports, distinguished by which identifier is
+/// set (never both, never neither):
+/// - `sessionId` — the Hermes Sessions API (`POST /api/sessions`).
+/// - `conversationKey` — the older Runs API `conversation` param. Only
+///   ever present on chats migrated from the pre-unification `Topic`
+///   entity; new chats are always Sessions-backed.
+///
+/// `ConversationService` (`Core/Conversation/`) hides this distinction from
+/// the rest of the app — `RunsConversationService` / `SessionsConversationService`
+/// pick the transport based on which identifier is set.
 @Model
 public final class Chat {
     /// Server-side Hermes session id (`POST /api/sessions` response).
-    @Attribute(.unique) var sessionId: String
+    /// `nil` for chats migrated from the old Runs API `Topic` entity.
+    @Attribute(.unique) var sessionId: String?
 
-    /// Local display title — mirrors the server's `title` once set.
+    /// The `conversation` parameter for the Runs API. Only set on chats
+    /// migrated from the old `Topic` entity — never assigned to new chats.
+    @Attribute(.unique) var conversationKey: String?
+
+    /// Display title for the sidebar.
     var title: String
 
     /// When the chat was first created.
@@ -27,20 +35,43 @@ public final class Chat {
     var lastActiveAt: Date
 
     /// Whether the server-side title has been set yet (first-message
-    /// auto-title, see `docs/task-topics-and-chats.md` §Этап 2).
+    /// auto-title). Always `true` for Runs-backed chats — their titles are
+    /// user-set only, never auto-titled.
     var hasAutoTitled: Bool
 
+    /// Shown in the sidebar's "Закреплённые" section, above the regular
+    /// chat list. Every migrated `Topic` becomes pinned; new chats start
+    /// unpinned.
+    var isPinned: Bool
+
     /// Messages belonging to this chat. Cascading delete removes all messages
-    /// when the chat is deleted. Left empty in practice — chat history is
-    /// re-fetched from the server on open rather than cached locally.
+    /// when the chat is deleted. For Sessions-backed chats this is left
+    /// empty in practice — chat history is re-fetched from the server on
+    /// open rather than cached locally.
     @Relationship(deleteRule: .cascade) var messages: [Message]
 
+    /// Creates a Sessions API-backed chat.
     init(sessionId: String, title: String) {
         self.sessionId = sessionId
+        self.conversationKey = nil
         self.title = title
         self.createdAt = Date()
         self.lastActiveAt = Date()
         self.hasAutoTitled = false
+        self.isPinned = false
+        self.messages = []
+    }
+
+    /// Creates a Runs API-backed chat — used only by the migration that
+    /// folds old `Topic` records into this unified model.
+    init(conversationKey: String, title: String, isPinned: Bool) {
+        self.sessionId = nil
+        self.conversationKey = conversationKey
+        self.title = title
+        self.createdAt = Date()
+        self.lastActiveAt = Date()
+        self.hasAutoTitled = true
+        self.isPinned = isPinned
         self.messages = []
     }
 }

@@ -1,23 +1,24 @@
 import SwiftUI
 
-// MARK: - TopicPaletteView
+// MARK: - ChatPaletteView
 //
 // Cmd+K quick-switcher overlay (docs/UI-SPEC.md §10 item 2). Centered
-// card over a 40%-black scrim: search field + filtered topic list,
-// arrow keys to move selection, Enter to open, Esc to dismiss.
+// card over a 40%-black scrim: search field + filtered chat list, arrow
+// keys to move selection, Enter to open, Esc to dismiss. Searches every
+// chat, pinned or not.
 
-struct TopicPaletteView: View {
-    let topics: [Topic]
-    let onSelect: (Topic) -> Void
+struct ChatPaletteView: View {
+    let chats: [Chat]
+    let onSelect: (Chat) -> Void
     let onDismiss: () -> Void
 
     @State private var query = ""
     @State private var selectedIndex = 0
     @FocusState private var isSearchFocused: Bool
 
-    private var filtered: [Topic] {
-        guard !query.isEmpty else { return topics }
-        return topics.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    private var filtered: [Chat] {
+        guard !query.isEmpty else { return chats }
+        return chats.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -34,7 +35,7 @@ struct TopicPaletteView: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("Поиск тем…", text: $query)
+            TextField("Поиск чатов…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -79,16 +80,16 @@ struct TopicPaletteView: View {
     @ViewBuilder
     private var list: some View {
         if filtered.isEmpty {
-            Text("Темы не найдены")
+            Text("Чаты не найдены")
                 .font(.hkCaption)
                 .foregroundStyle(Color.hkNeutral)
                 .padding(Space.md)
         } else {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(filtered.enumerated()), id: \.element.persistentModelID) { index, topic in
-                        row(topic: topic, isSelected: index == selectedIndex)
-                            .onTapGesture { onSelect(topic) }
+                    ForEach(Array(filtered.enumerated()), id: \.element.persistentModelID) { index, chat in
+                        row(chat: chat, isSelected: index == selectedIndex)
+                            .onTapGesture { onSelect(chat) }
                     }
                 }
                 .padding(Space.sm)
@@ -97,8 +98,8 @@ struct TopicPaletteView: View {
         }
     }
 
-    private func row(topic: Topic, isSelected: Bool) -> some View {
-        Text(topic.name)
+    private func row(chat: Chat, isSelected: Bool) -> some View {
+        Text(chat.title)
             .font(.hkBody.weight(.medium))
             .foregroundStyle(isSelected ? Color.hkInk : Color.hkMuted)
             .lineLimit(1)

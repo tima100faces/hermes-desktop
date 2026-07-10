@@ -13,7 +13,7 @@ final class ModelsTests: XCTestCase {
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Topic.self, Message.self,
+            for: Chat.self, Message.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
@@ -24,39 +24,50 @@ final class ModelsTests: XCTestCase {
         modelContainer = nil
     }
 
-    // MARK: - Topic
+    // MARK: - Chat
 
-    func testTopicInit() {
-        let topic = Topic(name: "Test", conversationKey: "test")
-        XCTAssertEqual(topic.name, "Test")
-        XCTAssertEqual(topic.conversationKey, "test")
-        XCTAssertNotNil(topic.createdAt)
-        XCTAssertNotNil(topic.lastActiveAt)
-        XCTAssertTrue(topic.messages.isEmpty)
+    func testRunsBackedChatInit() {
+        let chat = Chat(conversationKey: "test", title: "Test", isPinned: true)
+        XCTAssertEqual(chat.title, "Test")
+        XCTAssertEqual(chat.conversationKey, "test")
+        XCTAssertNil(chat.sessionId)
+        XCTAssertTrue(chat.isPinned)
+        XCTAssertNotNil(chat.createdAt)
+        XCTAssertNotNil(chat.lastActiveAt)
+        XCTAssertTrue(chat.messages.isEmpty)
     }
 
-    func testTopicConversationKeyUnique() throws {
-        let topic1 = Topic(name: "Topic A", conversationKey: "dup-key")
-        modelContext.insert(topic1)
+    func testSessionsBackedChatInit() {
+        let chat = Chat(sessionId: "session-1", title: "Test")
+        XCTAssertEqual(chat.title, "Test")
+        XCTAssertEqual(chat.sessionId, "session-1")
+        XCTAssertNil(chat.conversationKey)
+        XCTAssertFalse(chat.isPinned)
+        XCTAssertFalse(chat.hasAutoTitled)
+    }
+
+    func testChatConversationKeyUnique() throws {
+        let chat1 = Chat(conversationKey: "dup-key", title: "Chat A", isPinned: true)
+        modelContext.insert(chat1)
         try modelContext.save()
 
-        let topic2 = Topic(name: "Topic B", conversationKey: "dup-key")
-        modelContext.insert(topic2)
+        let chat2 = Chat(conversationKey: "dup-key", title: "Chat B", isPinned: true)
+        modelContext.insert(chat2)
 
         // SwiftData @Attribute(.unique) behavior: save may throw or silently merge.
-        // We verify that after save, we can still query topics.
+        // We verify that after save, we can still query chats.
         do {
             try modelContext.save()
         } catch {
             // Expected: unique constraint violation is valid behavior
-            modelContext.delete(topic2)
+            modelContext.delete(chat2)
             try modelContext.save()
         }
 
-        // Either way, topic1 should still exist
-        let fetch = FetchDescriptor<Topic>()
-        let topics = try modelContext.fetch(fetch)
-        XCTAssertFalse(topics.isEmpty)
+        // Either way, chat1 should still exist
+        let fetch = FetchDescriptor<Chat>()
+        let chats = try modelContext.fetch(fetch)
+        XCTAssertFalse(chats.isEmpty)
     }
 
     // MARK: - Message
@@ -67,7 +78,7 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(message.role, "user")
         XCTAssertNotNil(message.timestamp)
         XCTAssertNil(message.runId)
-        XCTAssertNil(message.topic)
+        XCTAssertNil(message.chat)
     }
 
     func testMessageRoleEnum() {
@@ -76,23 +87,23 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(Message.Role.tool.rawValue, "tool")
     }
 
-    func testTopicCascadeDelete() throws {
-        // Given: a topic with two messages
-        let topic = Topic(name: "Cascade", conversationKey: "cascade-test")
+    func testChatCascadeDelete() throws {
+        // Given: a chat with two messages
+        let chat = Chat(conversationKey: "cascade-test", title: "Cascade", isPinned: true)
         let msg1 = Message(content: "First", role: .user)
         let msg2 = Message(content: "Second", role: .assistant)
-        topic.messages = [msg1, msg2]
-        modelContext.insert(topic)
-        // NOTE: SwiftData infers the inverse relationship from Message.topic
-        // to Topic.messages, so inserting the topic inserts its messages.
+        chat.messages = [msg1, msg2]
+        modelContext.insert(chat)
+        // NOTE: SwiftData infers the inverse relationship from Message.chat
+        // to Chat.messages, so inserting the chat inserts its messages.
         try modelContext.save()
 
         // Verify messages exist before deletion
         let fetchBefore = try modelContext.fetch(FetchDescriptor<Message>())
         XCTAssertEqual(fetchBefore.count, 2)
 
-        // When: delete the topic
-        modelContext.delete(topic)
+        // When: delete the chat
+        modelContext.delete(chat)
         try modelContext.save()
 
         // Then: messages are also gone (cascade delete)

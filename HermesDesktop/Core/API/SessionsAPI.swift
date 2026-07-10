@@ -62,9 +62,10 @@ public protocol SessionsAPIProtocol: Actor {
 
 // MARK: - SessionsAPI
 
-/// High-level API for Hermes Sessions API — backs free-form `Chat`
-/// conversations (docs/task-topics-and-chats.md §Этап 2), as opposed to
-/// `Topic`, which stays on the older Runs API (`RunsAPI`) unchanged.
+/// High-level API for Hermes Sessions API — backs Sessions-backed `Chat`
+/// conversations, as opposed to pinned, Runs-backed chats (migrated from
+/// the old `Topic` entity), which stay on the older Runs API (`RunsAPI`)
+/// unchanged.
 public actor SessionsAPI: SessionsAPIProtocol {
 
     // MARK: - Properties

@@ -35,8 +35,8 @@ final class AppState {
     private(set) var apiClient: HermesAPIClient?
 
     /// The Runs API — set after successful initialisation.
-    /// `nil` when not configured. Backs `Topic` conversations, unchanged
-    /// from before Этап 2.
+    /// `nil` when not configured. Backs pinned chats migrated from the old
+    /// `Topic` entity.
     private(set) var runsAPI: RunsAPI?
 
     /// The Sessions API — set after successful initialisation.

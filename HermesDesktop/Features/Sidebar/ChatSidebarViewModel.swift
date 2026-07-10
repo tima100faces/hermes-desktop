@@ -4,11 +4,13 @@ import Observation
 
 // MARK: - ChatSidebarViewModel
 
-/// ViewModel for the sidebar's chat list (Sessions API-backed).
+/// ViewModel for the sidebar's single chat list.
 ///
-/// Kept separate from `SidebarViewModel` (topics) since chat CRUD is
-/// network-backed (create/rename/delete all round-trip to the Sessions
-/// API), unlike topics, which are purely local.
+/// Create always goes through the Sessions API — pinned, Runs-backed chats
+/// only ever come from migrated `Topic` data, never from the "+" button.
+/// Rename and delete branch on transport: Sessions-backed chats
+/// (`sessionId != nil`) round-trip to the server; Runs-backed chats
+/// (`conversationKey != nil`) are local-only, same as before unification.
 @MainActor
 @Observable
 final class ChatSidebarViewModel {
@@ -45,7 +47,8 @@ final class ChatSidebarViewModel {
 
     // MARK: - Create
 
-    /// Creates a new, empty chat (`POST /api/sessions`) and returns it.
+    /// Creates a new, empty Sessions-backed chat (`POST /api/sessions`) and
+    /// returns it.
     ///
     /// - Parameter context: The SwiftData `ModelContext` to insert into.
     /// - Returns: The newly created `Chat`, or `nil` if the request failed.
@@ -62,6 +65,15 @@ final class ChatSidebarViewModel {
         }
     }
 
+    // MARK: - Pin
+
+    /// Toggles `isPinned` — purely local, no server round-trip for either
+    /// transport.
+    func togglePin(_ chat: Chat, context: ModelContext) {
+        chat.isPinned.toggle()
+        try? context.save()
+    }
+
     // MARK: - Delete
 
     /// Request deletion — shows confirmation alert first.
@@ -70,7 +82,9 @@ final class ChatSidebarViewModel {
         showDeleteConfirmation = true
     }
 
-    /// Confirm and execute the pending deletion (`DELETE /api/sessions/{id}`).
+    /// Confirm and execute the pending deletion. Sessions-backed chats are
+    /// also deleted server-side (`DELETE /api/sessions/{id}`); Runs-backed
+    /// chats are local-only.
     ///
     /// Returns the deleted `Chat` (or `nil` if nothing was pending) so the
     /// caller can clear its selection if it pointed at this chat — passing
@@ -81,7 +95,9 @@ final class ChatSidebarViewModel {
     @discardableResult
     func confirmDelete(context: ModelContext) async -> Chat? {
         guard let chat = pendingDeletion else { return nil }
-        try? await sessionsAPI.deleteSession(id: chat.sessionId)
+        if let sessionId = chat.sessionId {
+            try? await sessionsAPI.deleteSession(id: sessionId)
+        }
         context.delete(chat)
         try? context.save()
         pendingDeletion = nil
@@ -106,7 +122,9 @@ final class ChatSidebarViewModel {
         isRenamingChat = true
     }
 
-    /// Confirm and apply the pending rename (`PATCH /api/sessions/{id}`).
+    /// Confirm and apply the pending rename. Sessions-backed chats also
+    /// rename server-side (`PATCH /api/sessions/{id}`) and drop their
+    /// first-message auto-title; Runs-backed chats are local-only.
     ///
     /// - Parameter context: The SwiftData `ModelContext` to save into.
     func confirmRename(context: ModelContext) async {
@@ -117,19 +135,22 @@ final class ChatSidebarViewModel {
         }
         guard let chat = pendingRename else { return }
 
-        do {
-            _ = try await sessionsAPI.renameSession(id: chat.sessionId, title: trimmed)
-            chat.title = trimmed
-            // A manual rename overrides the first-message auto-title.
+        if let sessionId = chat.sessionId {
+            do {
+                _ = try await sessionsAPI.renameSession(id: sessionId, title: trimmed)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
             chat.hasAutoTitled = true
-            try? context.save()
-
-            renameChatName = ""
-            pendingRename = nil
-            isRenamingChat = false
-        } catch {
-            errorMessage = error.localizedDescription
         }
+
+        chat.title = trimmed
+        try? context.save()
+
+        renameChatName = ""
+        pendingRename = nil
+        isRenamingChat = false
     }
 
     /// Cancel the pending rename.

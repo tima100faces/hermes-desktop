@@ -1,18 +1,21 @@
 import Foundation
 import SwiftData
 
-// MARK: - ChatConversationService
+// MARK: - SessionsConversationService
 
-/// `ConversationService` backed by a `Chat` — the new Sessions API path.
+/// `ConversationService` backed by a `Chat`'s `sessionId` — the Sessions
+/// API path. Only ever constructed for a Sessions-backed `Chat`
+/// (`sessionId != nil`).
 ///
 /// Message bodies aren't cached locally: the server is authoritative, and
 /// `loadMessages` re-fetches on every open. Only the owning `Chat` row's
 /// metadata (title, `lastActiveAt`) is persisted in SwiftData.
 @MainActor
-public final class ChatConversationService: ConversationService {
+public final class SessionsConversationService: ConversationService {
 
     private let sessionsAPI: SessionsAPIProtocol
     private let chat: Chat
+    private let sessionId: String
 
     /// The Sessions API has no per-turn identifier — always `nil`.
     public let currentTurnId: String? = nil
@@ -22,12 +25,14 @@ public final class ChatConversationService: ConversationService {
     private var cancelCurrentStream: (@Sendable () -> Void)?
 
     public init(sessionsAPI: SessionsAPIProtocol, chat: Chat) {
+        precondition(chat.sessionId != nil, "SessionsConversationService requires a Sessions-backed Chat")
         self.sessionsAPI = sessionsAPI
         self.chat = chat
+        self.sessionId = chat.sessionId!
     }
 
     public func loadMessages(context: ModelContext) async -> [Message] {
-        guard let remote = try? await sessionsAPI.getMessages(sessionId: chat.sessionId) else {
+        guard let remote = try? await sessionsAPI.getMessages(sessionId: sessionId) else {
             return []
         }
         return remote.compactMap { row in
@@ -44,7 +49,7 @@ public final class ChatConversationService: ConversationService {
     }
 
     public func send(input: String) async throws -> AsyncStream<RunEvent> {
-        let (stream, cancel) = try await sessionsAPI.streamChat(sessionId: chat.sessionId, input: input)
+        let (stream, cancel) = try await sessionsAPI.streamChat(sessionId: sessionId, input: input)
         cancelCurrentStream = cancel
         return stream
     }
@@ -61,7 +66,7 @@ public final class ChatConversationService: ConversationService {
         let title = String(firstMessageText.prefix(40))
         chat.hasAutoTitled = true
         do {
-            _ = try await sessionsAPI.renameSession(id: chat.sessionId, title: title)
+            _ = try await sessionsAPI.renameSession(id: sessionId, title: title)
             chat.title = title
             try? context.save()
         } catch {
