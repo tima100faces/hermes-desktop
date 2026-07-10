@@ -1,0 +1,21 @@
+# Xcode
+*.xcuserdata
+*.xcworkspace/xcuserdata
+DerivedData/
+*.xcodeproj/xcuserdata
+*.xcodeproj/project.xcworkspace/xcuserdata
+
+# SwiftPM
+.build/
+Packages/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+
+# Secrets
+.env
+*.xcconfig
+!Configuration/Debug.xcconfig
+!Configuration/Release.xcconfig
