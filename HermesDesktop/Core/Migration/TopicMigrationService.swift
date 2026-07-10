@@ -67,31 +67,53 @@ enum TopicMigrationService {
             return
         }
 
+        // Fully materialize every project and message into plain value types
+        // *before* touching the store file below. SwiftData model objects
+        // lazily fault their properties/relationships in from the backing
+        // store; reading them after `relocateLegacyStore` moves that file
+        // out from under `legacyContext` crashes (fault fulfillment fails).
+        let projectsData: [LegacyProjectData] = legacyProjects.map { project in
+            LegacyProjectData(
+                name: project.name,
+                conversationKey: project.conversationKey,
+                createdAt: project.createdAt,
+                lastActiveAt: project.lastActiveAt,
+                messages: project.messages.map { message in
+                    LegacyMessageData(
+                        content: message.content,
+                        role: message.role,
+                        timestamp: message.timestamp,
+                        runId: message.runId
+                    )
+                }
+            )
+        }
+
         try relocateLegacyStore(at: storeURL)
 
         let newContainer = try ModelContainer(for: Topic.self, Message.self)
         let newContext = ModelContext(newContainer)
 
-        for legacyProject in legacyProjects {
-            let topic = Topic(name: legacyProject.name, conversationKey: legacyProject.conversationKey)
-            topic.createdAt = legacyProject.createdAt
-            topic.lastActiveAt = legacyProject.lastActiveAt
+        for projectData in projectsData {
+            let topic = Topic(name: projectData.name, conversationKey: projectData.conversationKey)
+            topic.createdAt = projectData.createdAt
+            topic.lastActiveAt = projectData.lastActiveAt
             newContext.insert(topic)
 
-            for legacyMessage in legacyProject.messages {
+            for messageData in projectData.messages {
                 let message = Message(
-                    content: legacyMessage.content,
-                    role: Message.Role(rawValue: legacyMessage.role) ?? .assistant,
-                    runId: legacyMessage.runId
+                    content: messageData.content,
+                    role: Message.Role(rawValue: messageData.role) ?? .assistant,
+                    runId: messageData.runId
                 )
-                message.timestamp = legacyMessage.timestamp
+                message.timestamp = messageData.timestamp
                 message.topic = topic
                 newContext.insert(message)
             }
         }
 
         try newContext.save()
-        Logger.migration.info("Migrated \(legacyProjects.count) project(s) to topics.")
+        Logger.migration.info("Migrated \(projectsData.count) project(s) to topics.")
     }
 
     /// Renames the old store files (`.store`, `-wal`, `-shm`) with a
@@ -109,4 +131,25 @@ enum TopicMigrationService {
             try fm.moveItem(at: source, to: destination)
         }
     }
+}
+
+// MARK: - Plain Value Snapshots
+
+/// Plain-value copy of a `LegacyTopicSchema.Message`, safe to hold onto
+/// after the backing store file has been moved.
+private struct LegacyMessageData {
+    let content: String
+    let role: String
+    let timestamp: Date
+    let runId: String?
+}
+
+/// Plain-value copy of a `LegacyTopicSchema.Project` and its messages,
+/// safe to hold onto after the backing store file has been moved.
+private struct LegacyProjectData {
+    let name: String
+    let conversationKey: String
+    let createdAt: Date
+    let lastActiveAt: Date
+    let messages: [LegacyMessageData]
 }
