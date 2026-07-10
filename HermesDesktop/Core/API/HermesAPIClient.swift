@@ -90,7 +90,10 @@ public actor HermesAPIClient {
             throw APIError.unauthorized
         }
 
-        let url = URL(string: endpoint.path, relativeTo: baseURL)!
+        let urlString = baseURL.absoluteString.hasSuffix("/")
+            ? baseURL.absoluteString + endpoint.path.dropFirst()
+            : baseURL.absoluteString + endpoint.path
+        let url = URL(string: urlString)!
         print("🌐 [HermesDesktop] Request: \(endpoint.method) \(url.absoluteString)")
 
         var urlRequest = URLRequest(url: url)

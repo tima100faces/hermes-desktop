@@ -17,6 +17,9 @@ public enum APIError: Error, LocalizedError, Equatable {
     /// HTTP 404 – the requested resource was not found.
     case notFound
 
+    /// HTTP 405 – the HTTP method is not allowed for this endpoint.
+    case methodNotAllowed
+
     /// HTTP 500+ – the server encountered an unexpected condition.
     case serverError(statusCode: Int)
 
@@ -45,6 +48,8 @@ public enum APIError: Error, LocalizedError, Equatable {
             self = .unauthorized
         case 404:
             self = .notFound
+        case 405:
+            self = .methodNotAllowed
         case let code where code >= 500:
             self = .serverError(statusCode: code)
         default:
@@ -73,6 +78,8 @@ public enum APIError: Error, LocalizedError, Equatable {
             return "Unauthorized. Please check your API key and try again."
         case .notFound:
             return "The requested resource was not found."
+        case .methodNotAllowed:
+            return "HTTP 405: Method not allowed. The server does not support this request method."
         case .serverError(let statusCode):
             return "Server error (\(statusCode)). Please try again later."
         case .networkError(let underlying):
@@ -93,6 +100,8 @@ public enum APIError: Error, LocalizedError, Equatable {
         case (.unauthorized, .unauthorized):
             return true
         case (.notFound, .notFound):
+            return true
+        case (.methodNotAllowed, .methodNotAllowed):
             return true
         case (.serverError(let lCode), .serverError(let rCode)):
             return lCode == rCode

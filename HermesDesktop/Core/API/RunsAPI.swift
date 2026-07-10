@@ -176,9 +176,12 @@ public actor RunsAPI: RunsAPIProtocol {
     /// - Parameter runId: The ID of the run to stream.
     /// - Returns: An unbounded `AsyncStream<RunEvent>`.
     public func streamEvents(runId: String) async -> AsyncStream<RunEvent> {
-        // Construct SSE URL properly with multi-segment path (e.g. /v1/runs/{id}/events)
+        // Construct SSE URL by string concatenation (appendingPathComponent and
+        // URL(string:relativeTo:) both mangle multi-segment paths).
         let endpoint = HermesAPIClient.Endpoint.runEvents(runId: runId)
-        let streamURL = URL(string: endpoint.path, relativeTo: apiClient.baseURL)!
+        let base = apiClient.baseURL.absoluteString
+        let urlString = base.hasSuffix("/") ? base + endpoint.path.dropFirst() : base + endpoint.path
+        let streamURL = URL(string: urlString)!
 
         // Retrieve the Bearer token. If this fails, return an empty stream.
         let token: String
