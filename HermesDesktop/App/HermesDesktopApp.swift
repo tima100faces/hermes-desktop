@@ -38,9 +38,11 @@ struct HermesDesktopApp: App {
             content
                 .modelContainer(modelContainer)
                 .task { await appState.initialize() }
+                .frame(minWidth: 780, idealWidth: 900, minHeight: 520, idealHeight: 600)
         }
         .windowStyle(.titleBar)
         .windowResizability(.contentMinSize)
+        .defaultSize(width: 900, height: 600)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }

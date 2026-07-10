@@ -91,7 +91,7 @@ struct ChatView: View {
                 .foregroundStyle(Color.hkNeutral)
                 .frame(maxWidth: .infinity)
             Text("Start a conversation")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.hkMuted)
                 .frame(maxWidth: .infinity)
             Text("Type a message below to begin chatting with Hermes.")
@@ -132,7 +132,7 @@ struct InputBar: View {
             HStack(alignment: .bottom, spacing: Space.sm) {
                 TextField("Message", text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundStyle(Color.hkInk)
                     .padding(.horizontal, Space.md)
                     .padding(.vertical, Space.sm)
@@ -149,7 +149,7 @@ struct InputBar: View {
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 14))
+                            .font(.system(size: 13))
                             .foregroundStyle(Color.hkAccent)
                             .frame(width: 32, height: 32)
                     }
@@ -159,7 +159,7 @@ struct InputBar: View {
                 } else {
                     Button(action: onSend) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(width: 28, height: 28)
                     }

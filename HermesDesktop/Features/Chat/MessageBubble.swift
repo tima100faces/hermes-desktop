@@ -21,7 +21,7 @@ struct MessageBubble: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else {
                     Text(message.content)
-                        .font(.system(size: 14))
+                        .font(.system(size: 13))
                         .foregroundStyle(isUser ? .white : Color.hkInk)
                         .padding(.horizontal, Space.lg)
                         .padding(.vertical, Space.sm)

@@ -64,8 +64,8 @@ public extension Color {
 
     // MARK: - Backgrounds (Linear-inspired depth stepping)
 
-    /// Page background — near-black canvas (oklch 8%).
-    static let hkPage     = oklchToColor(lightness: 0.08, chroma: 0.004, hue: 270)
+    /// Page background — near-black canvas (oklch 9%).
+    static let hkPage     = oklchToColor(lightness: 0.09, chroma: 0.004, hue: 270)
     /// Panel / sidebar background (oklch 11%).
     static let hkPanel    = oklchToColor(lightness: 0.11, chroma: 0.006, hue: 270)
     /// Card / surface background (oklch 16%).
@@ -89,12 +89,12 @@ public extension Color {
     /// Primary text — soft white, not pure (oklch 95%).
     static let hkInk      = oklchToColor(lightness: 0.95, chroma: 0.003, hue: 270)
 
-    // MARK: - Accent (Linear-style indigo-violet)
+    // MARK: - Accent (macOS-native blue-gray, subdued)
 
-    /// Primary accent (oklch 55% 0.20 285).
-    static let hkAccent   = oklchToColor(lightness: 0.55, chroma: 0.20, hue: 285)
-    /// Hover / highlight accent (oklch 65% 0.18 285).
-    static let hkAccent2  = oklchToColor(lightness: 0.65, chroma: 0.18, hue: 285)
+    /// Primary accent (oklch 48% 0.12 255).
+    static let hkAccent   = oklchToColor(lightness: 0.48, chroma: 0.12, hue: 255)
+    /// Hover / highlight accent (oklch 56% 0.11 255).
+    static let hkAccent2  = oklchToColor(lightness: 0.56, chroma: 0.11, hue: 255)
     /// Dim accent for subtle emphasis (same L/C, 15% opacity).
-    static let hkAccentDim = oklchToColor(lightness: 0.55, chroma: 0.20, hue: 285).opacity(0.15)
+    static let hkAccentDim = oklchToColor(lightness: 0.48, chroma: 0.12, hue: 255).opacity(0.15)
 }

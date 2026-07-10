@@ -9,12 +9,12 @@ struct ProjectRow: View {
     var body: some View {
         HStack(spacing: Space.sm) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 14))
+                .font(.system(size: 13))
                 .foregroundStyle(Color.hkMuted)
 
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(project.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.hkInk)
                     .lineLimit(1)
                 Text(lastActiveText)
