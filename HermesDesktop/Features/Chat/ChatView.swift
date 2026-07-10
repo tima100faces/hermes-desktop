@@ -39,7 +39,7 @@ struct ChatView: View {
                             .padding(.horizontal, Space.lg)
                             .padding(.vertical, Space.sm)
                             .background(Color.hkSurface2)
-                            .clipShape(BubbleShape(isUser: false))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             Spacer(minLength: 60)
                         }
                         .padding(.horizontal, Space.sm)
