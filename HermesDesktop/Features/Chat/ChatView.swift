@@ -23,6 +23,20 @@ struct ChatView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
+            chatBody(availableHeight: geometry.size.height)
+        }
+        .background(Color.hkPage)
+        .onAppear {
+            viewModel.loadMessages(context: modelContext)
+        }
+    }
+
+    /// - Parameter availableHeight: The full chat pane height, used to
+    ///   cap the input field's growth at half the pane (docs/UI-SPEC.md §6) —
+    ///   matching Claude's desktop app rather than a fixed line count.
+    @ViewBuilder
+    private func chatBody(availableHeight: CGFloat) -> some View {
         VStack(spacing: 0) {
             header
 
@@ -122,13 +136,10 @@ struct ChatView: View {
             InputBar(
                 text: $viewModel.inputText,
                 isStreaming: viewModel.isStreaming,
+                maxHeight: availableHeight * 0.5,
                 onSend: { sendMessage() },
                 onStop: { stopStreaming() }
             )
-        }
-        .background(Color.hkPage)
-        .onAppear {
-            viewModel.loadMessages(context: modelContext)
         }
     }
 
@@ -239,8 +250,9 @@ struct ScrollToBottomButton: View {
 
 // MARK: - InputBar
 //
-// Single Surface card containing a growing text field (1–8 lines) and
-// the send/stop button (docs/UI-SPEC.md §6).
+// Single Surface card containing a growing text field (1 line up to
+// half the chat pane's height) and the send/stop button
+// (docs/UI-SPEC.md §6).
 //   Enter        → send
 //   Shift+Enter  → newline
 
@@ -248,37 +260,44 @@ struct InputBar: View {
 
     @Binding var text: String
     let isStreaming: Bool
+    /// Half the chat pane's height — matches Claude's desktop app rather
+    /// than a fixed line count.
+    let maxHeight: CGFloat
     let onSend: () -> Void
     let onStop: () -> Void
 
-    @FocusState private var isFocused: Bool
+    @State private var textHeight: CGFloat = GrowingTextEditor.singleLineHeight
 
     private var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var editorMaxHeight: CGFloat {
+        max(GrowingTextEditor.singleLineHeight, maxHeight)
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: Space.sm) {
-            TextField("Message", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.hkBody)
-                .lineSpacing(LineSpacing.body)
-                .foregroundStyle(Color.hkInk)
-                .lineLimit(1...8)
-                .focused($isFocused)
-                .onKeyPress(.return, phases: .down) { press in
-                    if press.modifiers.contains(.shift) {
-                        // Shift+Enter → newline. Appends at the end of the
-                        // text; cursor-position-aware insertion is a known
-                        // limitation (see UI-SPEC.md §6).
-                        text += "\n"
-                        return .handled
-                    }
-                    guard !isStreaming, !isEmpty else { return .handled }
-                    onSend()
-                    return .handled
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text("Message")
+                        .font(.hkBody)
+                        .foregroundStyle(Color.hkNeutral)
+                        .allowsHitTesting(false)
                 }
-                .padding(.vertical, 6)
+                GrowingTextEditor(
+                    text: $text,
+                    height: $textHeight,
+                    minHeight: GrowingTextEditor.singleLineHeight,
+                    maxHeight: editorMaxHeight,
+                    onPlainReturn: {
+                        guard !isStreaming, !isEmpty else { return }
+                        onSend()
+                    }
+                )
+            }
+            .frame(height: textHeight)
+            .padding(.vertical, 6)
 
             if isStreaming {
                 controlButton(
@@ -311,7 +330,6 @@ struct InputBar: View {
         .padding(.top, Space.xs)
         .padding(.bottom, Space.md)
         .background(Color.hkPage)
-        .onAppear { isFocused = true }
     }
 
     private func controlButton(
