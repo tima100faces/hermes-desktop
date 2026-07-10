@@ -17,11 +17,11 @@ struct RenameChatSheet: View {
 
     var body: some View {
         VStack(spacing: Space.md) {
-            Text("Переименовать чат")
+            Text("Rename chat")
                 .font(.hkTitleEm)
                 .foregroundColor(.hkInk)
 
-            TextField("Название чата", text: $viewModel.renameChatName)
+            TextField("Chat name", text: $viewModel.renameChatName)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)

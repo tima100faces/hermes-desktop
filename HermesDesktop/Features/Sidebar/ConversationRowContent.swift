@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - ConversationRowContent
 //
 // Shared visual content for a sidebar chat row — same anatomy in both the
-// "Закреплённые" and "Чаты" sections per docs/UI-SPEC.md §9, kept in one
+// "Pinned" and "Chats" sections per docs/UI-SPEC.md §9, kept in one
 // place so a visual tweak doesn't need to be made twice.
 
 struct ConversationRowContent: View {
@@ -57,14 +57,14 @@ struct ConversationMenuButton: View {
     let onRename: () -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
-    var help: String = "Действия"
+    var help: String = "Actions"
 
     @State private var isHovering = false
 
     var body: some View {
         Menu {
             Button("Rename") { onRename() }
-            Button(isPinned ? "Открепить" : "Закрепить") { onTogglePin() }
+            Button(isPinned ? "Unpin" : "Pin") { onTogglePin() }
             Button("Delete", role: .destructive) { onDelete() }
         } label: {
             Image(systemName: "ellipsis")

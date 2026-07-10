@@ -21,8 +21,9 @@ struct SettingsView: View {
 
     @State private var viewModel: SettingsViewModel
 
-    /// Agent display name shown in the sidebar footer.
-    @AppStorage("agent_name") private var agentName: String = "Ржавчик"
+    /// Agent display name shown in the sidebar footer. No hardcoded
+    /// default: empty falls back to "Hermes" in the sidebar.
+    @AppStorage("agent_name") private var agentName: String = ""
 
     // MARK: Initializer
 
@@ -63,7 +64,7 @@ struct SettingsView: View {
             TextField(
                 "Agent name",
                 text: $agentName,
-                prompt: Text("Ржавчик")
+                prompt: Text("Hermes")
             )
             .font(.hkBody)
             .textFieldStyle(.roundedBorder)

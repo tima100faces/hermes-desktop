@@ -194,7 +194,7 @@ final class SidebarViewModelTests: XCTestCase {
         await viewModel.confirmRename(context: modelContext)
 
         // Assert
-        XCTAssertEqual(viewModel.errorMessage, "Название чата не может быть пустым")
+        XCTAssertEqual(viewModel.errorMessage, "Chat name cannot be empty")
         XCTAssertEqual(chat.title, "Old Title")
         XCTAssertTrue(viewModel.isRenamingChat)
     }

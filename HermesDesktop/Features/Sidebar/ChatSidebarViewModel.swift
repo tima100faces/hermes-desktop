@@ -55,7 +55,7 @@ final class ChatSidebarViewModel {
     func createChat(context: ModelContext) async -> Chat? {
         do {
             let session = try await sessionsAPI.createSession()
-            let chat = Chat(sessionId: session.id, title: session.title ?? "Новый чат")
+            let chat = Chat(sessionId: session.id, title: session.title ?? "New chat")
             context.insert(chat)
             try? context.save()
             return chat
@@ -130,7 +130,7 @@ final class ChatSidebarViewModel {
     func confirmRename(context: ModelContext) async {
         let trimmed = renameChatName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            errorMessage = "Название чата не может быть пустым"
+            errorMessage = "Chat name cannot be empty"
             return
         }
         guard let chat = pendingRename else { return }

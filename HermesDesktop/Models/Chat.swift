@@ -39,7 +39,7 @@ public final class Chat {
     /// user-set only, never auto-titled.
     var hasAutoTitled: Bool
 
-    /// Shown in the sidebar's "Закреплённые" section, above the regular
+    /// Shown in the sidebar's "Pinned" section, above the regular
     /// chat list. Every migrated `Topic` becomes pinned; new chats start
     /// unpinned.
     var isPinned: Bool

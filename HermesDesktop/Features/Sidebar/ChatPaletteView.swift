@@ -35,7 +35,7 @@ struct ChatPaletteView: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("Поиск чатов…", text: $query)
+            TextField("Search chats…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -80,7 +80,7 @@ struct ChatPaletteView: View {
     @ViewBuilder
     private var list: some View {
         if filtered.isEmpty {
-            Text("Чаты не найдены")
+            Text("No chats found")
                 .font(.hkCaption)
                 .foregroundStyle(Color.hkNeutral)
                 .padding(Space.md)

@@ -177,7 +177,7 @@ private struct ContentView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(Color.hkNeutral)
 
-            Text(chats.isEmpty ? "Начни первый чат" : "Выбери чат")
+            Text(chats.isEmpty ? "Start your first chat" : "Select a chat")
                 .font(.hkBody)
                 .foregroundStyle(Color.hkMuted)
         }

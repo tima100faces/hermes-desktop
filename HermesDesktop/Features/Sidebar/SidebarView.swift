@@ -7,8 +7,8 @@ import SwiftData
 // HStack (not NavigationSplitView) so macOS system materials never
 // override the hkPanel background.
 //
-// Two sections: "Закреплённые" (only shown when at least one chat is
-// pinned) above "Чаты" (docs/UI-SPEC.md §9). Both lists are
+// Two sections: "Pinned" (only shown when at least one chat is
+// pinned) above "Chats" (docs/UI-SPEC.md §9). Both lists are
 // ScrollView + buttons, NOT List: the native macOS List draws its own
 // full-width selection highlight on top of listRowBackground, which is
 // impossible to disable cleanly. Do not convert this back to List.
@@ -29,8 +29,9 @@ struct SidebarView: View {
     /// The chat currently under the pointer — reveals its "…" menu.
     @State private var hoveredChat: Chat?
 
-    /// Agent display name — editable in Settings → General.
-    @AppStorage("agent_name") private var agentName: String = "Ржавчик"
+    /// Agent display name — editable in Settings → General. No hardcoded
+    /// default: empty falls back to "Hermes" below.
+    @AppStorage("agent_name") private var agentName: String = ""
 
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
@@ -64,15 +65,15 @@ struct SidebarView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     if !pinnedChats.isEmpty {
-                        sectionHeader(title: "Закреплённые")
+                        sectionHeader(title: "Pinned")
                         ForEach(pinnedChats) { chat in
                             chatRow(chat)
                         }
                     }
 
                     sectionHeader(
-                        title: "Чаты",
-                        help: "Новый чат",
+                        title: "Chats",
+                        help: "New chat",
                         action: { Task { await createChat() } }
                     )
                     .padding(.top, pinnedChats.isEmpty ? 0 : Space.sm)
@@ -108,7 +109,7 @@ struct SidebarView: View {
         .sheet(isPresented: $chatViewModel.isRenamingChat) {
             RenameChatSheet(viewModel: chatViewModel, modelContext: modelContext)
         }
-        .alert("Удалить чат?", isPresented: $chatViewModel.showDeleteConfirmation) {
+        .alert("Delete chat?", isPresented: $chatViewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { chatViewModel.cancelDelete() }
             Button("Delete", role: .destructive) {
                 Task {
@@ -119,7 +120,7 @@ struct SidebarView: View {
                 }
             }
         } message: {
-            Text("Чат будет удалён навсегда.")
+            Text("This chat will be permanently deleted.")
         }
         .onAppear {
             // Auto-open the most recently active chat on launch, so the
@@ -174,7 +175,7 @@ struct SidebarView: View {
                     onRename: { chatViewModel.requestRename(chat) },
                     onTogglePin: { chatViewModel.togglePin(chat, context: modelContext) },
                     onDelete: { chatViewModel.requestDelete(chat) },
-                    help: "Действия с чатом"
+                    help: "Chat actions"
                 )
                 .padding(.trailing, Space.xs)
             }
@@ -188,7 +189,7 @@ struct SidebarView: View {
         }
         .contextMenu {
             Button("Rename") { chatViewModel.requestRename(chat) }
-            Button(chat.isPinned ? "Открепить" : "Закрепить") {
+            Button(chat.isPinned ? "Unpin" : "Pin") {
                 chatViewModel.togglePin(chat, context: modelContext)
             }
             Button("Delete", role: .destructive) { chatViewModel.requestDelete(chat) }
