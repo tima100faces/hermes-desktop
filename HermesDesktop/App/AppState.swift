@@ -10,8 +10,9 @@ import Observation
 /// The single source of truth for app-level dependencies and configuration.
 ///
 /// Owns the long-lived instances of `KeychainManager`, `GitSyncService`,
-/// `HermesAPIClient`, and `RunsAPI`, and determines whether the user sees
-/// the Onboarding flow or the main ContentView based on stored credentials.
+/// `HermesAPIClient`, `RunsAPI`, and `ConnectionMonitor`, and determines
+/// whether the user sees the Onboarding flow or the main ContentView based
+/// on stored credentials.
 ///
 /// ## Lifecycle
 /// 1. `HermesDesktopApp` creates an `@State private var appState = AppState()`.
@@ -36,6 +37,10 @@ final class AppState {
     /// The Runs API — set after successful initialisation.
     /// `nil` when not configured.
     private(set) var runsAPI: RunsAPI?
+
+    /// Polls the Hermes API health endpoint for the sidebar status dot.
+    /// `nil` when not configured.
+    private(set) var connectionMonitor: ConnectionMonitor?
 
     // MARK: - Dependencies (always alive)
 
@@ -84,6 +89,11 @@ final class AppState {
         self.apiClient = client
         self.runsAPI = runs
         self.isConfigured = true
+
+        // --- Start health polling for the sidebar status dot -------------------
+        let monitor = ConnectionMonitor(apiClient: client)
+        self.connectionMonitor = monitor
+        monitor.start()
 
         // --- Fire-and-forget git sync ------------------------------------------
         Task.detached { [gitSyncService] in

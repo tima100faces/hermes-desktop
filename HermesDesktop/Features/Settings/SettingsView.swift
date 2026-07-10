@@ -1,6 +1,8 @@
 // MARK: - SettingsView
 //
-// macOS Settings screen — connection, git sync, and about.
+// macOS Settings screen — general, connection, git sync, and about.
+// The General section is expected to grow (agent name today; more
+// app-level preferences later) — add new fields there.
 
 import SwiftUI
 
@@ -8,7 +10,8 @@ import SwiftUI
 
 /// The macOS Settings screen for Hermes Desktop.
 ///
-/// Organised into three sections:
+/// Organised into four sections:
+/// - **General**: app-level preferences (agent display name, …).
 /// - **Connection**: API URL and API key fields.
 /// - **Sync**: git pull status and trigger button.
 /// - **About**: app version and GitHub link.
@@ -17,6 +20,9 @@ struct SettingsView: View {
     // MARK: State
 
     @State private var viewModel: SettingsViewModel
+
+    /// Agent display name shown in the sidebar footer.
+    @AppStorage("agent_name") private var agentName: String = "Ржавчик"
 
     // MARK: Initializer
 
@@ -38,14 +44,34 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            generalSection
             connectionSection
             syncSection
             aboutSection
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 400)
+        .frame(width: 480, height: 460)
         .background(Color.hkPage)
         .task { await viewModel.load() }
+    }
+
+    // MARK: - General Section
+
+    @ViewBuilder
+    private var generalSection: some View {
+        Section("General") {
+            TextField(
+                "Agent name",
+                text: $agentName,
+                prompt: Text("Ржавчик")
+            )
+            .font(.hkBody)
+            .textFieldStyle(.roundedBorder)
+
+            Text("Shown in the sidebar footer. Saved automatically.")
+                .font(.hkCaption)
+                .foregroundStyle(Color.hkNeutral)
+        }
     }
 
     // MARK: - Connection Section
@@ -75,8 +101,8 @@ struct SettingsView: View {
                         .font(.hkCaption)
                         .foregroundStyle(
                             feedback == "Settings saved"
-                                ? Color.hkAccent
-                                : Color.red
+                                ? Color.hkAccent2
+                                : Color.hkError
                         )
                         .onTapGesture { viewModel.clearFeedback() }
                 }
@@ -146,7 +172,7 @@ struct SettingsView: View {
                     string: "https://github.com/nousresearch/hermes-desktop"
                 )!)
                 .font(.hkBody)
-                .foregroundStyle(Color.hkAccent)
+                .foregroundStyle(Color.hkAccent2)
             }
         }
     }

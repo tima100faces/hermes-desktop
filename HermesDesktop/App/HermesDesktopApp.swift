@@ -95,9 +95,12 @@ private struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(onSelectProject: { project in
-                selectedProject = project
-            })
+            SidebarView(
+                connectionMonitor: appState.connectionMonitor,
+                onSelectProject: { project in
+                    selectedProject = project
+                }
+            )
             .frame(width: 220)
 
             Rectangle()
@@ -121,7 +124,9 @@ private struct ContentView: View {
 
     // MARK: Empty Detail
 
-    /// Placeholder shown when no project is selected.
+    /// Placeholder shown when no project is selected (first launch with
+    /// zero projects — otherwise the sidebar auto-selects the most
+    /// recent one).
     @ViewBuilder
     private var emptyDetail: some View {
         VStack(spacing: Space.md) {

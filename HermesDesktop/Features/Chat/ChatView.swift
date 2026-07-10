@@ -22,13 +22,21 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Space.md) {
-                        if viewModel.messages.isEmpty && !viewModel.isStreaming {
-                            emptyStateContent
-                        } else {
-                            ForEach(viewModel.messages) { message in
-                                MessageBubble(message: message)
-                                    .id(message.id)
+                        // Empty projects open as a clean chat — no placeholder
+                        // content by design (docs/UI-SPEC.md §3).
+                        ForEach(viewModel.messages) { message in
+                            MessageBubble(message: message)
+                                .id(message.id)
+                        }
+
+                        // "Thinking" — run is active but no tokens arrived yet.
+                        if viewModel.isStreaming && viewModel.streamingContent.isEmpty {
+                            HStack {
+                                ThinkingIndicator()
+                                Spacer(minLength: 60)
                             }
+                            .padding(.horizontal, Space.md)
+                            .id("streaming")
                         }
 
                         // Streaming assistant content — flat, no bubble,
@@ -62,6 +70,9 @@ struct ChatView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
+                .onChange(of: viewModel.isStreaming) { _, streaming in
+                    if streaming { proxy.scrollTo("streaming", anchor: .bottom) }
+                }
                 .onChange(of: viewModel.streamingContent) { _, _ in
                     proxy.scrollTo("streaming", anchor: .bottom)
                 }
@@ -121,29 +132,6 @@ struct ChatView: View {
         viewModel.agentStatuses.filter { $0.state == .running }.count
     }
 
-    // MARK: - Empty State
-
-    private var emptyStateContent: some View {
-        VStack(spacing: Space.md) {
-            Spacer().frame(height: 120)
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
-                .foregroundStyle(Color.hkNeutral)
-                .frame(maxWidth: .infinity)
-            Text("Start a conversation")
-                .font(.hkBody.weight(.medium))
-                .foregroundStyle(Color.hkMuted)
-                .frame(maxWidth: .infinity)
-            Text("Type a message below to begin chatting with Hermes.")
-                .font(.hkBody)
-                .foregroundStyle(Color.hkNeutral)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, Space.xl)
-        }
-        .frame(maxWidth: .infinity, minHeight: 300)
-    }
-
     private func sendMessage() {
         guard !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         Task { await viewModel.sendMessage(context: modelContext) }
@@ -151,6 +139,37 @@ struct ChatView: View {
 
     private func stopStreaming() {
         Task { viewModel.stopStreaming(context: modelContext) }
+    }
+}
+
+// MARK: - ThinkingIndicator
+//
+// Pulsing rust dot shown while a run is active but no tokens have
+// arrived yet — the agent is "thinking" (docs/UI-SPEC.md §3).
+//
+// NOTE: repeatForever animations must be started via withAnimation
+// inside .task — the onAppear + .animation(value:) pattern silently
+// fails to start when the state flips during view insertion.
+
+struct ThinkingIndicator: View {
+
+    @State private var pulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.hkAccent2)
+            .frame(width: 10, height: 10)
+            .scaleEffect(pulsing ? 1.25 : 0.75)
+            .opacity(pulsing ? 0.45 : 1.0)
+            .frame(width: 20, height: 20)
+            .padding(.vertical, Space.xs)
+            .task {
+                withAnimation(
+                    .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                ) {
+                    pulsing = true
+                }
+            }
     }
 }
 

@@ -55,6 +55,23 @@ public actor HermesAPIClient {
         return token
     }
 
+    /// Lightweight reachability check against `GET /v1/health`.
+    ///
+    /// Success is any 2xx status. Never throws — any failure (transport
+    /// error, missing token, non-2xx) is reported as `false`. Used by
+    /// `ConnectionMonitor` for the sidebar status dot.
+    public func ping() async -> Bool {
+        do {
+            var request = try await buildRequest(from: .health)
+            request.timeoutInterval = 10
+            let (_, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return false }
+            return (200..<300).contains(http.statusCode)
+        } catch {
+            return false
+        }
+    }
+
     /// Performs a typed API request.
     ///
     /// - Parameter endpoint: The `Endpoint` describing the request.

@@ -14,9 +14,16 @@ import SwiftData
 
 struct SidebarView: View {
 
+    /// Health monitor for the footer status dot. Optional so previews
+    /// and the unconfigured state work without one.
+    var connectionMonitor: ConnectionMonitor?
+
     let onSelectProject: (Project) -> Void
 
     @State private var viewModel = SidebarViewModel()
+
+    /// Agent display name — editable in Settings → General.
+    @AppStorage("agent_name") private var agentName: String = "Ржавчик"
 
     @Query(sort: \Project.lastActiveAt, order: .reverse)
     private var projects: [Project]
@@ -77,16 +84,15 @@ struct SidebarView: View {
             }
             .scrollIndicators(.hidden)
 
-            // Agent status footer.
-            // TODO: bind the dot color and label to the agent identity and
-            // a real Hermes API health check (next stage — UI-SPEC.md §10).
+            // Agent status footer: name from Settings, dot from health check.
             HStack(spacing: Space.sm) {
                 Circle()
-                    .fill(Color.hkSuccess)
+                    .fill(statusDotColor)
                     .frame(width: 7, height: 7)
-                Text("Ржавчик")
+                Text(agentName.isEmpty ? "Hermes" : agentName)
                     .font(.hkCaption)
                     .foregroundStyle(Color.hkNeutral)
+                    .lineLimit(1)
                 Spacer()
             }
             .padding(.horizontal, Space.md)
@@ -96,6 +102,7 @@ struct SidebarView: View {
                     .fill(Color.white.opacity(0.06))
                     .frame(height: 1)
             }
+            .help(statusHelp)
         }
         .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingProject) {
@@ -109,6 +116,32 @@ struct SidebarView: View {
         }
         .onChange(of: viewModel.selectedProject) { _, project in
             if let project { onSelectProject(project) }
+        }
+        .onAppear {
+            // Auto-open the most recent project on launch, so the app
+            // starts in a chat instead of the empty placeholder
+            // (docs/UI-SPEC.md §9).
+            if viewModel.selectedProject == nil, let mostRecent = projects.first {
+                viewModel.selectedProject = mostRecent
+            }
+        }
+    }
+
+    // MARK: - Status
+
+    private var statusDotColor: Color {
+        switch connectionMonitor?.status {
+        case .online:  return .hkSuccess
+        case .offline: return .hkError
+        default:       return .hkNeutral
+        }
+    }
+
+    private var statusHelp: String {
+        switch connectionMonitor?.status {
+        case .online:  return "Hermes API: online"
+        case .offline: return "Hermes API: offline"
+        default:       return "Hermes API: checking…"
         }
     }
 
