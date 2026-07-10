@@ -124,6 +124,7 @@ final class ChatViewModel {
         // --- Persist user message ---
         let userMsg = Message(content: text, role: .user)
         userMsg.project = project
+        project.lastActiveAt = Date()
         context.insert(userMsg)
         try? context.save()
         messages.append(userMsg)
@@ -176,6 +177,7 @@ final class ChatViewModel {
                         runId: response.runId
                     )
                     assistantMsg.project = project
+                    project.lastActiveAt = Date()
                     context.insert(assistantMsg)
                     try? context.save()
                     messages.append(assistantMsg)
@@ -206,6 +208,7 @@ final class ChatViewModel {
                     runId: response.runId
                 )
                 partialMsg.project = project
+                project.lastActiveAt = Date()
                 context.insert(partialMsg)
                 try? context.save()
                 messages.append(partialMsg)
@@ -252,6 +255,7 @@ final class ChatViewModel {
         guard !streamingContent.isEmpty else { return }
         let partialMsg = Message(content: streamingContent, role: .assistant)
         partialMsg.project = project
+        project.lastActiveAt = Date()
         context.insert(partialMsg)
         try? context.save()
         messages.append(partialMsg)
