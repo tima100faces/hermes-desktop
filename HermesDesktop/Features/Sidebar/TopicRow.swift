@@ -1,19 +1,19 @@
 import SwiftUI
 
-// MARK: - ProjectRow
+// MARK: - TopicRow
 //
-// Sidebar project row. Selected state: rust bar on the leading edge +
+// Sidebar topic row. Selected state: rust bar on the leading edge +
 // light-rust timestamp (background fill is applied by SidebarView).
 
-struct ProjectRow: View {
+struct TopicRow: View {
 
-    let project: Project
+    let topic: Topic
     var isSelected: Bool = false
 
     var body: some View {
         HStack(spacing: Space.sm) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
+                Text(topic.name)
                     .font(.hkBody.weight(.medium))
                     .foregroundStyle(isSelected ? Color.hkInk : Color.hkMuted)
                     .lineLimit(1)
@@ -40,17 +40,17 @@ struct ProjectRow: View {
     private var lastActiveText: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: project.lastActiveAt, relativeTo: Date())
+        return formatter.localizedString(for: topic.lastActiveAt, relativeTo: Date())
     }
 }
 
-// MARK: - ProjectMenuButton
+// MARK: - TopicMenuButton
 
-/// "…" trigger for a project row, revealed on hover — opens a menu with
+/// "…" trigger for a topic row, revealed on hover — opens a menu with
 /// Rename / Delete. Same 26×26 ghost style as `IconActionButton`, but
 /// placed as a sibling of the row's selection button (not nested inside
 /// its label) so the menu remains clickable.
-struct ProjectMenuButton: View {
+struct TopicMenuButton: View {
     let onRename: () -> Void
     let onDelete: () -> Void
 
@@ -72,6 +72,6 @@ struct ProjectMenuButton: View {
         .background(isHovering ? Color.hkHover : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onHover { isHovering = $0 }
-        .help("Project actions")
+        .help("Действия с темой")
     }
 }

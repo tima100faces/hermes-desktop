@@ -17,8 +17,10 @@ import SwiftData
 /// - **Settings**: A standard macOS Settings window.
 ///
 /// ## SwiftData
-/// A shared `ModelContainer` for `Project` and `Message` is injected
-/// into the view hierarchy via `.modelContainer(for: ...)`.
+/// A shared `ModelContainer` for `Topic` and `Message` is injected
+/// into the view hierarchy via `.modelContainer(for: ...)`. Before it's
+/// created, `TopicMigrationService` transfers any pre-rename `Project`
+/// data (see `docs/UI-SPEC.md` migration note) into the new schema.
 @main
 struct HermesDesktopApp: App {
 
@@ -27,9 +29,10 @@ struct HermesDesktopApp: App {
     /// The global DI container — alive for the app's lifetime.
     @State private var appState = AppState()
 
-    /// Shared SwiftData container for projects and messages.
+    /// Shared SwiftData container for topics and messages.
     private let modelContainer: ModelContainer = {
-        try! ModelContainer(for: Project.self, Message.self)
+        TopicMigrationService.migrateIfNeeded()
+        return try! ModelContainer(for: Topic.self, Message.self)
     }()
 
     // MARK: Body
@@ -88,14 +91,14 @@ private struct ContentView: View {
 
     let appState: AppState
 
-    /// The project the user has selected in the sidebar.
-    @State private var selectedProject: Project?
+    /// The topic the user has selected in the sidebar.
+    @State private var selectedTopic: Topic?
 
     /// Whether the Cmd+K quick-switcher overlay is shown.
     @State private var isPaletteShown = false
 
-    @Query(sort: \Project.lastActiveAt, order: .reverse)
-    private var projects: [Project]
+    @Query(sort: \Topic.lastActiveAt, order: .reverse)
+    private var topics: [Topic]
 
     // MARK: Body
 
@@ -104,7 +107,7 @@ private struct ContentView: View {
             HStack(spacing: 0) {
                 SidebarView(
                     connectionMonitor: appState.connectionMonitor,
-                    selectedProject: $selectedProject
+                    selectedTopic: $selectedTopic
                 )
                 .frame(width: 220)
 
@@ -114,9 +117,9 @@ private struct ContentView: View {
                     .ignoresSafeArea()
 
                 Group {
-                    if let project = selectedProject, let runsAPI = appState.runsAPI {
-                        ChatView(project: project, runsAPI: runsAPI)
-                            .id(project.persistentModelID)
+                    if let topic = selectedTopic, let runsAPI = appState.runsAPI {
+                        ChatView(topic: topic, runsAPI: runsAPI)
+                            .id(topic.persistentModelID)
                     } else {
                         emptyDetail
                     }
@@ -127,10 +130,10 @@ private struct ContentView: View {
             .ignoresSafeArea()
 
             if isPaletteShown {
-                ProjectPaletteView(
-                    projects: projects,
-                    onSelect: { project in
-                        selectedProject = project
+                TopicPaletteView(
+                    topics: topics,
+                    onSelect: { topic in
+                        selectedTopic = topic
                         isPaletteShown = false
                     },
                     onDismiss: { isPaletteShown = false }
@@ -149,8 +152,8 @@ private struct ContentView: View {
 
     // MARK: Empty Detail
 
-    /// Placeholder shown when no project is selected (first launch with
-    /// zero projects — otherwise the sidebar auto-selects the most
+    /// Placeholder shown when no topic is selected (first launch with
+    /// zero topics — otherwise the sidebar auto-selects the most
     /// recent one).
     @ViewBuilder
     private var emptyDetail: some View {
@@ -159,7 +162,7 @@ private struct ContentView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(Color.hkNeutral)
 
-            Text("Select a project")
+            Text("Выбери тему")
                 .font(.hkBody)
                 .foregroundStyle(Color.hkMuted)
         }

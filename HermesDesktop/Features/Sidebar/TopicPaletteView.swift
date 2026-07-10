@@ -1,23 +1,23 @@
 import SwiftUI
 
-// MARK: - ProjectPaletteView
+// MARK: - TopicPaletteView
 //
 // Cmd+K quick-switcher overlay (docs/UI-SPEC.md §10 item 2). Centered
-// card over a 40%-black scrim: search field + filtered project list,
+// card over a 40%-black scrim: search field + filtered topic list,
 // arrow keys to move selection, Enter to open, Esc to dismiss.
 
-struct ProjectPaletteView: View {
-    let projects: [Project]
-    let onSelect: (Project) -> Void
+struct TopicPaletteView: View {
+    let topics: [Topic]
+    let onSelect: (Topic) -> Void
     let onDismiss: () -> Void
 
     @State private var query = ""
     @State private var selectedIndex = 0
     @FocusState private var isSearchFocused: Bool
 
-    private var filtered: [Project] {
-        guard !query.isEmpty else { return projects }
-        return projects.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    private var filtered: [Topic] {
+        guard !query.isEmpty else { return topics }
+        return topics.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -34,7 +34,7 @@ struct ProjectPaletteView: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("Search projects…", text: $query)
+            TextField("Поиск тем…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -79,16 +79,16 @@ struct ProjectPaletteView: View {
     @ViewBuilder
     private var list: some View {
         if filtered.isEmpty {
-            Text("No projects found")
+            Text("Темы не найдены")
                 .font(.hkCaption)
                 .foregroundStyle(Color.hkNeutral)
                 .padding(Space.md)
         } else {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(filtered.enumerated()), id: \.element.persistentModelID) { index, project in
-                        row(project: project, isSelected: index == selectedIndex)
-                            .onTapGesture { onSelect(project) }
+                    ForEach(Array(filtered.enumerated()), id: \.element.persistentModelID) { index, topic in
+                        row(topic: topic, isSelected: index == selectedIndex)
+                            .onTapGesture { onSelect(topic) }
                     }
                 }
                 .padding(Space.sm)
@@ -97,8 +97,8 @@ struct ProjectPaletteView: View {
         }
     }
 
-    private func row(project: Project, isSelected: Bool) -> some View {
-        Text(project.name)
+    private func row(topic: Topic, isSelected: Bool) -> some View {
+        Text(topic.name)
             .font(.hkBody.weight(.medium))
             .foregroundStyle(isSelected ? Color.hkInk : Color.hkMuted)
             .lineLimit(1)

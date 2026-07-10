@@ -12,209 +12,211 @@ final class SidebarViewModelTests: XCTestCase {
     var modelContainer: ModelContainer!
     var modelContext: ModelContext!
     var viewModel: SidebarViewModel!
+    var selectedTopic: Topic?
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Project.self, Message.self,
+            for: Topic.self, Message.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
 
         viewModel = SidebarViewModel()
+        selectedTopic = nil
     }
 
     override func tearDown() async throws {
         viewModel = nil
         modelContext = nil
         modelContainer = nil
+        selectedTopic = nil
     }
 
-    // MARK: - Create Project
+    // MARK: - Create Topic
 
-    func testCreateProjectInsertsIntoSwiftData() throws {
+    func testCreateTopicInsertsIntoSwiftData() throws {
         // Arrange
-        viewModel.newProjectName = "My Project"
+        viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        // Assert — project persisted
-        let descriptor = FetchDescriptor<Project>()
-        let projects = try modelContext.fetch(descriptor)
+        // Assert — topic persisted
+        let descriptor = FetchDescriptor<Topic>()
+        let topics = try modelContext.fetch(descriptor)
 
-        XCTAssertEqual(projects.count, 1)
-        XCTAssertEqual(projects[0].name, "My Project")
+        XCTAssertEqual(topics.count, 1)
+        XCTAssertEqual(topics[0].name, "My Topic")
     }
 
-    func testCreateProjectSetsSelectedProject() {
+    func testCreateTopicSetsSelectedTopic() {
         // Arrange
-        viewModel.newProjectName = "My Project"
+        viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertNotNil(viewModel.selectedProject)
-        XCTAssertEqual(viewModel.selectedProject?.name, "My Project")
+        XCTAssertNotNil(selectedTopic)
+        XCTAssertEqual(selectedTopic?.name, "My Topic")
     }
 
-    func testCreateProjectClearsNameAndDismissesSheet() {
+    func testCreateTopicClearsNameAndDismissesSheet() {
         // Arrange
-        viewModel.newProjectName = "My Project"
-        viewModel.isCreatingProject = true
+        viewModel.newTopicName = "My Topic"
+        viewModel.isCreatingTopic = true
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertTrue(viewModel.newProjectName.isEmpty)
-        XCTAssertFalse(viewModel.isCreatingProject)
+        XCTAssertTrue(viewModel.newTopicName.isEmpty)
+        XCTAssertFalse(viewModel.isCreatingTopic)
     }
 
-    func testCreateProjectEmptyNameShowsError() {
+    func testCreateTopicEmptyNameShowsError() {
         // Arrange — empty name
-        viewModel.newProjectName = ""
+        viewModel.newTopicName = ""
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertEqual(viewModel.errorMessage, "Project name cannot be empty")
+        XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
 
-        // No project should have been created
-        let descriptor = FetchDescriptor<Project>()
-        let projects = try? modelContext.fetch(descriptor)
-        XCTAssertEqual(projects?.count ?? 0, 0)
+        // No topic should have been created
+        let descriptor = FetchDescriptor<Topic>()
+        let topics = try? modelContext.fetch(descriptor)
+        XCTAssertEqual(topics?.count ?? 0, 0)
 
-        // selectedProject should remain nil
-        XCTAssertNil(viewModel.selectedProject)
+        // selectedTopic should remain nil
+        XCTAssertNil(selectedTopic)
     }
 
-    func testCreateProjectWhitespaceNameShowsError() {
+    func testCreateTopicWhitespaceNameShowsError() {
         // Arrange
-        viewModel.newProjectName = "   \n  \t  "
+        viewModel.newTopicName = "   \n  \t  "
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertEqual(viewModel.errorMessage, "Project name cannot be empty")
+        XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
     }
 
     // MARK: - Conversation Key Generation
 
     func testConversationKeyGeneration() {
         // Arrange
-        viewModel.newProjectName = "My Project"
+        viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertEqual(viewModel.selectedProject?.conversationKey, "my-project")
+        XCTAssertEqual(selectedTopic?.conversationKey, "my-topic")
     }
 
     func testConversationKeyStripsSpecialCharacters() {
         // Arrange
-        viewModel.newProjectName = "Hello! @World #2024"
+        viewModel.newTopicName = "Hello! @World #2024"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert — only lowercase alphanumeric and hyphens
-        XCTAssertEqual(viewModel.selectedProject?.conversationKey, "hello-world-2024")
+        XCTAssertEqual(selectedTopic?.conversationKey, "hello-world-2024")
     }
 
     func testConversationKeyHandlesMixedCase() {
         // Arrange
-        viewModel.newProjectName = "UPPERCASE Project"
+        viewModel.newTopicName = "UPPERCASE Topic"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertEqual(viewModel.selectedProject?.conversationKey, "uppercase-project")
+        XCTAssertEqual(selectedTopic?.conversationKey, "uppercase-topic")
     }
 
     func testConversationKeyHandlesMultipleHyphens() {
         // Arrange
-        viewModel.newProjectName = "A   B   C"
+        viewModel.newTopicName = "A   B   C"
 
         // Act
-        viewModel.createProject(context: modelContext)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertEqual(viewModel.selectedProject?.conversationKey, "a---b---c")
+        XCTAssertEqual(selectedTopic?.conversationKey, "a---b---c")
     }
 
-    // MARK: - Delete Project
+    // MARK: - Delete Topic
 
-    func testDeleteProjectRemovesFromSwiftData() throws {
+    func testDeleteTopicRemovesFromSwiftData() throws {
         // Arrange
-        viewModel.newProjectName = "Delete Me"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Delete Me"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        let project = viewModel.selectedProject!
-        viewModel.requestDelete(project)
+        let topic = selectedTopic!
+        viewModel.requestDelete(topic)
 
         // Act
-        viewModel.confirmDelete(context: modelContext)
+        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
 
-        // Assert — project removed
-        let descriptor = FetchDescriptor<Project>()
-        let projects = try modelContext.fetch(descriptor)
-        XCTAssertTrue(projects.isEmpty)
-        XCTAssertNil(viewModel.selectedProject)
+        // Assert — topic removed
+        let descriptor = FetchDescriptor<Topic>()
+        let topics = try modelContext.fetch(descriptor)
+        XCTAssertTrue(topics.isEmpty)
+        XCTAssertNil(selectedTopic)
         XCTAssertFalse(viewModel.showDeleteConfirmation)
     }
 
-    func testDeleteProjectClearsSelectionIfMatches() {
+    func testDeleteTopicClearsSelectionIfMatches() {
         // Arrange
-        viewModel.newProjectName = "Target"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Target"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        let project = viewModel.selectedProject!
-        viewModel.requestDelete(project)
+        let topic = selectedTopic!
+        viewModel.requestDelete(topic)
 
         // Act
-        viewModel.confirmDelete(context: modelContext)
+        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        XCTAssertNil(viewModel.selectedProject)
+        XCTAssertNil(selectedTopic)
     }
 
-    func testDeleteProjectDoesNotClearSelectionIfDifferent() throws {
-        // Arrange — create two projects, select the second
-        viewModel.newProjectName = "First"
-        viewModel.createProject(context: modelContext)
+    func testDeleteTopicDoesNotClearSelectionIfDifferent() throws {
+        // Arrange — create two topics, select the second
+        viewModel.newTopicName = "First"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        viewModel.newProjectName = "Second"
-        viewModel.createProject(context: modelContext)
-        let secondProject = viewModel.selectedProject!
+        viewModel.newTopicName = "Second"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        // Now delete the first project
-        let descriptor = FetchDescriptor<Project>(
+        // Now delete the first topic
+        let descriptor = FetchDescriptor<Topic>(
             predicate: #Predicate { $0.name == "First" }
         )
-        let projects = try modelContext.fetch(descriptor)
-        let firstProject = projects[0]
+        let topics = try modelContext.fetch(descriptor)
+        let firstTopic = topics[0]
 
-        viewModel.requestDelete(firstProject)
-        viewModel.confirmDelete(context: modelContext)
+        viewModel.requestDelete(firstTopic)
+        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert — selection unchanged (still "Second")
-        XCTAssertEqual(viewModel.selectedProject?.name, "Second")
+        XCTAssertEqual(selectedTopic?.name, "Second")
     }
 
     func testRequestDeleteShowsConfirmation() {
         // Arrange
-        viewModel.newProjectName = "Temp"
-        viewModel.createProject(context: modelContext)
-        let project = viewModel.selectedProject!
+        viewModel.newTopicName = "Temp"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        let topic = selectedTopic!
 
         // Act
-        viewModel.requestDelete(project)
+        viewModel.requestDelete(topic)
 
         // Assert
         XCTAssertTrue(viewModel.showDeleteConfirmation)
@@ -222,35 +224,35 @@ final class SidebarViewModelTests: XCTestCase {
 
     func testCancelDeleteHidesConfirmation() {
         // Arrange
-        viewModel.newProjectName = "Temp"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Temp"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        viewModel.requestDelete(viewModel.selectedProject!)
+        viewModel.requestDelete(selectedTopic!)
 
         // Act
         viewModel.cancelDelete()
 
         // Assert
         XCTAssertFalse(viewModel.showDeleteConfirmation)
-        // Project still exists
-        XCTAssertNotNil(viewModel.selectedProject)
+        // Topic still exists
+        XCTAssertNotNil(selectedTopic)
     }
 
     func testConfirmDeleteWithoutPendingDoesNothing() throws {
         // Act — no pending deletion set
-        viewModel.confirmDelete(context: modelContext)
+        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert — no crash, state unchanged
         XCTAssertFalse(viewModel.showDeleteConfirmation)
-        XCTAssertNil(viewModel.selectedProject)
+        XCTAssertNil(selectedTopic)
     }
 
     // MARK: - Error Handling
 
     func testClearError() {
         // Arrange
-        viewModel.newProjectName = ""
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = ""
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
         XCTAssertNotNil(viewModel.errorMessage)
 
         // Act
@@ -260,59 +262,59 @@ final class SidebarViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
-    // MARK: - Multiple Projects
+    // MARK: - Multiple Topics
 
-    func testMultipleProjectsCreated() throws {
+    func testMultipleTopicsCreated() throws {
         // Arrange
-        viewModel.newProjectName = "Alpha"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Alpha"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        viewModel.newProjectName = "Beta"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Beta"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
-        viewModel.newProjectName = "Gamma"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Gamma"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert
-        let descriptor = FetchDescriptor<Project>()
-        let projects = try modelContext.fetch(descriptor)
+        let descriptor = FetchDescriptor<Topic>()
+        let topics = try modelContext.fetch(descriptor)
 
-        XCTAssertEqual(projects.count, 3)
+        XCTAssertEqual(topics.count, 3)
         // Last created should be selected
-        XCTAssertEqual(viewModel.selectedProject?.name, "Gamma")
+        XCTAssertEqual(selectedTopic?.name, "Gamma")
     }
 
-    func testCreateProjectPreservesExistingProjects() throws {
+    func testCreateTopicPreservesExistingTopics() throws {
         // Arrange
-        viewModel.newProjectName = "Existing"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Existing"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Act
-        viewModel.newProjectName = "New"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "New"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert — both exist
-        let descriptor = FetchDescriptor<Project>()
-        let projects = try modelContext.fetch(descriptor)
-        XCTAssertEqual(projects.count, 2)
+        let descriptor = FetchDescriptor<Topic>()
+        let topics = try modelContext.fetch(descriptor)
+        XCTAssertEqual(topics.count, 2)
     }
 
     // MARK: - Deletion Clears Error
 
-    func testDeleteProjectClearsError() {
+    func testDeleteTopicClearsError() {
         // Arrange — trigger an error first
-        viewModel.newProjectName = ""
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = ""
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
         XCTAssertNotNil(viewModel.errorMessage)
 
-        // Create a valid project to delete
+        // Create a valid topic to delete
         viewModel.errorMessage = nil  // clear any residual error state
-        viewModel.newProjectName = "Delete Me"
-        viewModel.createProject(context: modelContext)
+        viewModel.newTopicName = "Delete Me"
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
 
         // Act
-        viewModel.requestDelete(viewModel.selectedProject!)
-        viewModel.confirmDelete(context: modelContext)
+        viewModel.requestDelete(selectedTopic!)
+        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
 
         // Assert — deletion succeeded, no error
         XCTAssertNil(viewModel.errorMessage)

@@ -22,7 +22,7 @@ final class ChatViewModel {
 
     // MARK: - Published State
 
-    /// All messages for the current project, in display order.
+    /// All messages for the current topic, in display order.
     var messages: [Message] = []
 
     /// The current text in the input field (bound to a TextEditor).
@@ -46,35 +46,35 @@ final class ChatViewModel {
     /// The Hermes Runs API client (actor).
     private let runsAPI: RunsAPIProtocol
 
-    /// The project this chat session belongs to.
-    private let project: Project
+    /// The topic this chat session belongs to.
+    private let topic: Topic
 
     /// The ID of the currently active run (nil when idle).
     private var currentRunId: String?
 
     // MARK: - Initialization
 
-    /// Creates a new `ChatViewModel` bound to a project.
+    /// Creates a new `ChatViewModel` bound to a topic.
     ///
     /// - Parameters:
     ///   - runsAPI: The `RunsAPIProtocol` actor used for create/stream/stop operations.
-    ///   - project: The `Project` whose messages are managed.
-    init(runsAPI: RunsAPIProtocol, project: Project) {
+    ///   - topic: The `Topic` whose messages are managed.
+    init(runsAPI: RunsAPIProtocol, topic: Topic) {
         self.runsAPI = runsAPI
-        self.project = project
+        self.topic = topic
     }
 
     // MARK: - Load Messages
 
-    /// Loads existing messages from SwiftData for the current project.
+    /// Loads existing messages from SwiftData for the current topic.
     ///
     /// Messages are fetched sorted by `timestamp` ascending (oldest first).
     ///
     /// - Parameter context: The SwiftData `ModelContext` to fetch from.
     func loadMessages(context: ModelContext) {
-        let key = project.conversationKey
+        let key = topic.conversationKey
         let descriptor = FetchDescriptor<Message>(
-            predicate: #Predicate { $0.project?.conversationKey == key },
+            predicate: #Predicate { $0.topic?.conversationKey == key },
             sortBy: [SortDescriptor(\.timestamp)]
         )
         if let loaded = try? context.fetch(descriptor) {
@@ -123,8 +123,8 @@ final class ChatViewModel {
 
         // --- Persist user message ---
         let userMsg = Message(content: text, role: .user)
-        userMsg.project = project
-        project.lastActiveAt = Date()
+        userMsg.topic = topic
+        topic.lastActiveAt = Date()
         context.insert(userMsg)
         try? context.save()
         messages.append(userMsg)
@@ -135,7 +135,7 @@ final class ChatViewModel {
         errorMessage = nil
         agentStatuses = []
 
-        let conversation = project.conversationKey
+        let conversation = topic.conversationKey
 
         do {
             let response = try await runsAPI.createRun(input: text, conversation: conversation)
@@ -176,8 +176,8 @@ final class ChatViewModel {
                         role: .assistant,
                         runId: response.runId
                     )
-                    assistantMsg.project = project
-                    project.lastActiveAt = Date()
+                    assistantMsg.topic = topic
+                    topic.lastActiveAt = Date()
                     context.insert(assistantMsg)
                     try? context.save()
                     messages.append(assistantMsg)
@@ -207,8 +207,8 @@ final class ChatViewModel {
                     role: .assistant,
                     runId: response.runId
                 )
-                partialMsg.project = project
-                project.lastActiveAt = Date()
+                partialMsg.topic = topic
+                topic.lastActiveAt = Date()
                 context.insert(partialMsg)
                 try? context.save()
                 messages.append(partialMsg)
@@ -254,8 +254,8 @@ final class ChatViewModel {
     private func savePartialContent(context: ModelContext) {
         guard !streamingContent.isEmpty else { return }
         let partialMsg = Message(content: streamingContent, role: .assistant)
-        partialMsg.project = project
-        project.lastActiveAt = Date()
+        partialMsg.topic = topic
+        topic.lastActiveAt = Date()
         context.insert(partialMsg)
         try? context.save()
         messages.append(partialMsg)

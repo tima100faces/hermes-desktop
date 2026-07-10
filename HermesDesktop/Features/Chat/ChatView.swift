@@ -15,11 +15,11 @@ struct ChatView: View {
     /// "am I scrolled to the bottom" signal without a scroll-offset API.
     @State private var isAtBottom = true
 
-    private let project: Project
+    private let topic: Topic
 
-    init(project: Project, runsAPI: RunsAPIProtocol) {
-        self.project = project
-        _viewModel = State(initialValue: ChatViewModel(runsAPI: runsAPI, project: project))
+    init(topic: Topic, runsAPI: RunsAPIProtocol) {
+        self.topic = topic
+        _viewModel = State(initialValue: ChatViewModel(runsAPI: runsAPI, topic: topic))
     }
 
     var body: some View {
@@ -43,7 +43,7 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Space.md) {
-                        // Empty projects open as a clean chat — no placeholder
+                        // Empty topics open as a clean chat — no placeholder
                         // content by design (docs/UI-SPEC.md §3).
                         ForEach(viewModel.messages) { message in
                             MessageBubble(message: message)
@@ -145,10 +145,10 @@ struct ChatView: View {
 
     // MARK: - Header
 
-    /// Project title bar with a live subagent badge.
+    /// Topic title bar with a live subagent badge.
     private var header: some View {
         HStack {
-            Text(project.name)
+            Text(topic.name)
                 .font(.hkBody.weight(.medium))
                 .foregroundStyle(Color.hkInk)
                 .lineLimit(1)

@@ -73,30 +73,30 @@ final class ChatViewModelTests: XCTestCase {
     var modelContainer: ModelContainer!
     var modelContext: ModelContext!
     var mockRunsAPI: MockRunsAPI!
-    var project: Project!
+    var topic: Topic!
     var viewModel: ChatViewModel!
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Project.self, Message.self,
+            for: Topic.self, Message.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
 
         mockRunsAPI = MockRunsAPI()
 
-        project = Project(name: "Test Project", conversationKey: "test-project")
-        modelContext.insert(project)
+        topic = Topic(name: "Test Topic", conversationKey: "test-topic")
+        modelContext.insert(topic)
         try modelContext.save()
 
-        viewModel = ChatViewModel(runsAPI: mockRunsAPI, project: project)
+        viewModel = ChatViewModel(runsAPI: mockRunsAPI, topic: topic)
     }
 
     override func tearDown() async throws {
         // Tear down in reverse order.
         viewModel = nil
-        project = nil
+        topic = nil
         mockRunsAPI = nil
         modelContext = nil
         modelContainer = nil
@@ -419,11 +419,11 @@ final class ChatViewModelTests: XCTestCase {
     func testLoadMessagesFetchesFromSwiftData() async throws {
         // Arrange — insert messages directly into SwiftData
         let msg1 = Message(content: "First", role: .user)
-        msg1.project = project
+        msg1.topic = topic
         modelContext.insert(msg1)
 
         let msg2 = Message(content: "Second", role: .assistant)
-        msg2.project = project
+        msg2.topic = topic
         modelContext.insert(msg2)
 
         try modelContext.save()
@@ -437,17 +437,17 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages[1].content, "Second")
     }
 
-    func testLoadMessagesOnlyFetchesForCurrentProject() async throws {
-        // Arrange — insert messages for the current project
+    func testLoadMessagesOnlyFetchesForCurrentTopic() async throws {
+        // Arrange — insert messages for the current topic
         let msg = Message(content: "Mine", role: .user)
-        msg.project = project
+        msg.topic = topic
         modelContext.insert(msg)
 
-        // Insert a message for a different project
-        let otherProject = Project(name: "Other", conversationKey: "other")
-        modelContext.insert(otherProject)
+        // Insert a message for a different topic
+        let otherTopic = Topic(name: "Other", conversationKey: "other")
+        modelContext.insert(otherTopic)
         let otherMsg = Message(content: "Not mine", role: .user)
-        otherMsg.project = otherProject
+        otherMsg.topic = otherTopic
         modelContext.insert(otherMsg)
 
         try modelContext.save()
@@ -455,7 +455,7 @@ final class ChatViewModelTests: XCTestCase {
         // Act
         viewModel.loadMessages(context: modelContext)
 
-        // Assert — only messages for test-project
+        // Assert — only messages for test-topic
         XCTAssertEqual(viewModel.messages.count, 1)
         XCTAssertEqual(viewModel.messages[0].content, "Mine")
     }

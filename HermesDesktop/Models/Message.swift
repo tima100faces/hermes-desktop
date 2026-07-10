@@ -21,8 +21,8 @@ public final class Message {
     /// The Hermes run ID that produced this message (nil for user messages).
     var runId: String?
 
-    /// The project this message belongs to.
-    var project: Project?
+    /// The topic this message belongs to.
+    var topic: Topic?
 
     // MARK: - Role
 

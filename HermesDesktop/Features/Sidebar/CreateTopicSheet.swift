@@ -1,16 +1,16 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - CreateProjectSheet
+// MARK: - CreateTopicSheet
 
-/// A small modal sheet for entering a new project name.
-struct CreateProjectSheet: View {
+/// A small modal sheet for entering a new topic name.
+struct CreateTopicSheet: View {
 
     // MARK: Dependencies
 
     @Bindable var viewModel: SidebarViewModel
     let modelContext: ModelContext
-    @Binding var selectedProject: Project?
+    @Binding var selectedTopic: Topic?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -18,11 +18,11 @@ struct CreateProjectSheet: View {
 
     var body: some View {
         VStack(spacing: Space.md) {
-            Text("New Project")
+            Text("Новая тема")
                 .font(.hkTitleEm)
                 .foregroundColor(.hkInk)
 
-            TextField("Project name", text: $viewModel.newProjectName)
+            TextField("Название темы", text: $viewModel.newTopicName)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -50,7 +50,7 @@ struct CreateProjectSheet: View {
 
             HStack(spacing: Space.sm) {
                 Button("Cancel", role: .cancel) {
-                    viewModel.newProjectName = ""
+                    viewModel.newTopicName = ""
                     viewModel.clearError()
                     dismiss()
                 }
@@ -61,7 +61,7 @@ struct CreateProjectSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.hkAccent)
-                .disabled(viewModel.newProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(viewModel.newTopicName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(Space.lg)
@@ -72,7 +72,7 @@ struct CreateProjectSheet: View {
     // MARK: - Actions
 
     private func createAndDismiss() {
-        viewModel.createProject(context: modelContext, selectedProject: &selectedProject)
+        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
         if viewModel.errorMessage == nil {
             dismiss()
         }
@@ -84,14 +84,14 @@ struct CreateProjectSheet: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Project.self,
+        for: Topic.self,
         configurations: config
     )
     let context = container.mainContext
 
-    CreateProjectSheet(
+    CreateTopicSheet(
         viewModel: SidebarViewModel(),
         modelContext: context,
-        selectedProject: .constant(nil)
+        selectedTopic: .constant(nil)
     )
 }

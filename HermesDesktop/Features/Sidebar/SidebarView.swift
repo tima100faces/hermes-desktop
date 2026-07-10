@@ -7,7 +7,7 @@ import SwiftData
 // HStack (not NavigationSplitView) so macOS system materials never
 // override the hkPanel background.
 //
-// The project list is a ScrollView + buttons, NOT a List: the native
+// The topic list is a ScrollView + buttons, NOT a List: the native
 // macOS List draws its own full-width selection highlight on top of
 // listRowBackground, which is impossible to disable cleanly. Do not
 // convert this back to List.
@@ -18,22 +18,22 @@ struct SidebarView: View {
     /// and the unconfigured state work without one.
     var connectionMonitor: ConnectionMonitor?
 
-    /// The app's single source of truth for which project is active —
+    /// The app's single source of truth for which topic is active —
     /// shared with ContentView so the sidebar highlight stays in sync
-    /// regardless of how the project changed (sidebar click, Cmd+K
+    /// regardless of how the topic changed (sidebar click, Cmd+K
     /// palette, etc).
-    @Binding var selectedProject: Project?
+    @Binding var selectedTopic: Topic?
 
     @State private var viewModel = SidebarViewModel()
 
-    /// The project currently under the pointer — reveals its "…" menu.
-    @State private var hoveredProject: Project?
+    /// The topic currently under the pointer — reveals its "…" menu.
+    @State private var hoveredTopic: Topic?
 
     /// Agent display name — editable in Settings → General.
     @AppStorage("agent_name") private var agentName: String = "Ржавчик"
 
-    @Query(sort: \Project.lastActiveAt, order: .reverse)
-    private var projects: [Project]
+    @Query(sort: \Topic.lastActiveAt, order: .reverse)
+    private var topics: [Topic]
 
     @Environment(\.modelContext) private var modelContext
 
@@ -45,60 +45,60 @@ struct SidebarView: View {
 
             // Header
             HStack {
-                Text("Projects")
+                Text("Темы")
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Color.hkNeutral)
                     .textCase(.uppercase)
                 Spacer()
-                Button(action: { viewModel.isCreatingProject = true }) {
+                Button(action: { viewModel.isCreatingTopic = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.hkNeutral)
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.plain)
-                .help("New project")
+                .help("Новая тема")
             }
             .padding(.horizontal, Space.md)
             .padding(.bottom, Space.sm)
 
-            // Project list — custom selection, no system List highlight.
+            // Topic list — custom selection, no system List highlight.
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(projects) { project in
+                    ForEach(topics) { topic in
                         HStack(spacing: 0) {
                             Button {
-                                selectedProject = project
+                                selectedTopic = topic
                             } label: {
-                                ProjectRow(
-                                    project: project,
-                                    isSelected: selectedProject == project
+                                TopicRow(
+                                    topic: topic,
+                                    isSelected: selectedTopic == topic
                                 )
                             }
                             .buttonStyle(.plain)
 
                             // Sibling of the selection Button (not nested in
                             // its label) so the menu stays clickable.
-                            if hoveredProject == project {
-                                ProjectMenuButton(
-                                    onRename: { viewModel.requestRename(project) },
-                                    onDelete: { viewModel.requestDelete(project) }
+                            if hoveredTopic == topic {
+                                TopicMenuButton(
+                                    onRename: { viewModel.requestRename(topic) },
+                                    onDelete: { viewModel.requestDelete(topic) }
                                 )
                                 .padding(.trailing, Space.xs)
                             }
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selectedProject == project
+                                .fill(selectedTopic == topic
                                       ? Color.hkAccentDim
                                       : Color.clear)
                         )
                         .onHover { hovering in
-                            hoveredProject = hovering ? project : (hoveredProject == project ? nil : hoveredProject)
+                            hoveredTopic = hovering ? topic : (hoveredTopic == topic ? nil : hoveredTopic)
                         }
                         .contextMenu {
-                            contextMenuActions(for: project)
+                            contextMenuActions(for: topic)
                         }
                     }
                 }
@@ -127,26 +127,26 @@ struct SidebarView: View {
             .help(statusHelp)
         }
         .background(Color.hkPanel)
-        .sheet(isPresented: $viewModel.isCreatingProject) {
-            CreateProjectSheet(viewModel: viewModel, modelContext: modelContext, selectedProject: $selectedProject)
+        .sheet(isPresented: $viewModel.isCreatingTopic) {
+            CreateTopicSheet(viewModel: viewModel, modelContext: modelContext, selectedTopic: $selectedTopic)
         }
-        .sheet(isPresented: $viewModel.isRenamingProject) {
-            RenameProjectSheet(viewModel: viewModel, modelContext: modelContext)
+        .sheet(isPresented: $viewModel.isRenamingTopic) {
+            RenameTopicSheet(viewModel: viewModel, modelContext: modelContext)
         }
-        .alert("Delete Project?", isPresented: $viewModel.showDeleteConfirmation) {
+        .alert("Удалить тему?", isPresented: $viewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
             Button("Delete", role: .destructive) {
-                viewModel.confirmDelete(context: modelContext, selectedProject: &selectedProject)
+                viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
             }
         } message: {
-            Text("This will permanently delete the project and all its messages.")
+            Text("Тема и вся переписка будут удалены навсегда.")
         }
         .onAppear {
-            // Auto-open the most recent project on launch, so the app
+            // Auto-open the most recent topic on launch, so the app
             // starts in a chat instead of the empty placeholder
             // (docs/UI-SPEC.md §9).
-            if selectedProject == nil, let mostRecent = projects.first {
-                selectedProject = mostRecent
+            if selectedTopic == nil, let mostRecent = topics.first {
+                selectedTopic = mostRecent
             }
         }
     }
@@ -170,12 +170,12 @@ struct SidebarView: View {
     }
 
     @ViewBuilder
-    private func contextMenuActions(for project: Project) -> some View {
+    private func contextMenuActions(for topic: Topic) -> some View {
         Button("Rename") {
-            viewModel.requestRename(project)
+            viewModel.requestRename(topic)
         }
         Button("Delete", role: .destructive) {
-            viewModel.requestDelete(project)
+            viewModel.requestDelete(topic)
         }
     }
 }
@@ -183,7 +183,7 @@ struct SidebarView: View {
 // MARK: - Preview
 
 #Preview {
-    SidebarView(selectedProject: .constant(nil))
+    SidebarView(selectedTopic: .constant(nil))
         .modelContainer(previewContainer)
         .frame(width: 220, height: 400)
 }
@@ -191,9 +191,9 @@ struct SidebarView: View {
 @MainActor
 private let previewContainer: ModelContainer = {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Project.self, configurations: config)
-    let project = Project(name: "Sample Project", conversationKey: "sample-project")
-    container.mainContext.insert(project)
+    let container = try! ModelContainer(for: Topic.self, configurations: config)
+    let topic = Topic(name: "Sample Topic", conversationKey: "sample-topic")
+    container.mainContext.insert(topic)
     try? container.mainContext.save()
     return container
 }()

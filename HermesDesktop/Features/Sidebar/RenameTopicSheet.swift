@@ -1,10 +1,10 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - RenameProjectSheet
+// MARK: - RenameTopicSheet
 
-/// A small modal sheet for editing an existing project's name.
-struct RenameProjectSheet: View {
+/// A small modal sheet for editing an existing topic's name.
+struct RenameTopicSheet: View {
 
     // MARK: Dependencies
 
@@ -17,11 +17,11 @@ struct RenameProjectSheet: View {
 
     var body: some View {
         VStack(spacing: Space.md) {
-            Text("Rename Project")
+            Text("Переименовать тему")
                 .font(.hkTitleEm)
                 .foregroundColor(.hkInk)
 
-            TextField("Project name", text: $viewModel.renameProjectName)
+            TextField("Название темы", text: $viewModel.renameTopicName)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -59,7 +59,7 @@ struct RenameProjectSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.hkAccent)
-                .disabled(viewModel.renameProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(viewModel.renameTopicName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(Space.lg)
@@ -82,12 +82,12 @@ struct RenameProjectSheet: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Project.self,
+        for: Topic.self,
         configurations: config
     )
     let context = container.mainContext
 
-    RenameProjectSheet(
+    RenameTopicSheet(
         viewModel: SidebarViewModel(),
         modelContext: context
     )

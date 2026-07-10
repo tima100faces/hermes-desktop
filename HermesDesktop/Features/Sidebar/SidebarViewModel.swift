@@ -4,9 +4,9 @@ import Observation
 
 // MARK: - SidebarViewModel
 
-/// ViewModel for the sidebar project list.
+/// ViewModel for the sidebar topic list.
 ///
-/// Manages project selection, creation, and deletion.
+/// Manages topic selection, creation, and deletion.
 /// Runs on `@MainActor` so it can safely drive SwiftUI state.
 @MainActor
 @Observable
@@ -14,11 +14,11 @@ final class SidebarViewModel {
 
     // MARK: Published State
 
-    /// Whether the "Create Project" sheet is presented.
-    var isCreatingProject = false
+    /// Whether the "Create Topic" sheet is presented.
+    var isCreatingTopic = false
 
-    /// Text binding for the new-project name text field.
-    var newProjectName = ""
+    /// Text binding for the new-topic name text field.
+    var newTopicName = ""
 
     /// Non-nil when an error should be displayed.
     var errorMessage: String?
@@ -26,30 +26,30 @@ final class SidebarViewModel {
     /// Whether the delete confirmation alert is shown.
     var showDeleteConfirmation = false
 
-    /// The project pending confirmation before deletion.
-    private var pendingDeletion: Project?
+    /// The topic pending confirmation before deletion.
+    private var pendingDeletion: Topic?
 
-    /// Whether the "Rename Project" sheet is presented.
-    var isRenamingProject = false
+    /// Whether the "Rename Topic" sheet is presented.
+    var isRenamingTopic = false
 
     /// Text binding for the rename text field.
-    var renameProjectName = ""
+    var renameTopicName = ""
 
-    /// The project pending a rename.
-    private var pendingRename: Project?
+    /// The topic pending a rename.
+    private var pendingRename: Topic?
 
     // MARK: - Intent(s)
 
-    /// Create a new project from the current `newProjectName` and select it.
+    /// Create a new topic from the current `newTopicName` and select it.
     ///
     /// - Parameters:
     ///   - context: The SwiftData `ModelContext` to insert into.
-    ///   - selectedProject: The app's active-project state — set to the
-    ///     newly created project on success.
-    func createProject(context: ModelContext, selectedProject: inout Project?) {
-        let trimmed = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+    ///   - selectedTopic: The app's active-topic state — set to the
+    ///     newly created topic on success.
+    func createTopic(context: ModelContext, selectedTopic: inout Topic?) {
+        let trimmed = newTopicName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            errorMessage = "Project name cannot be empty"
+            errorMessage = "Название темы не может быть пустым"
             return
         }
 
@@ -63,20 +63,20 @@ final class SidebarViewModel {
                 options: .regularExpression
             )
 
-        let project = Project(name: trimmed, conversationKey: key)
-        context.insert(project)
+        let topic = Topic(name: trimmed, conversationKey: key)
+        context.insert(topic)
         try? context.save()
 
-        newProjectName = ""
-        isCreatingProject = false
-        selectedProject = project
+        newTopicName = ""
+        isCreatingTopic = false
+        selectedTopic = topic
     }
 
     /// Request deletion — shows confirmation alert first.
     ///
-    /// - Parameter project: The project to delete.
-    func requestDelete(_ project: Project) {
-        pendingDeletion = project
+    /// - Parameter topic: The topic to delete.
+    func requestDelete(_ topic: Topic) {
+        pendingDeletion = topic
         showDeleteConfirmation = true
     }
 
@@ -84,14 +84,14 @@ final class SidebarViewModel {
     ///
     /// - Parameters:
     ///   - context: The SwiftData `ModelContext` to delete from.
-    ///   - selectedProject: The app's active-project state — cleared if it
-    ///     pointed at the deleted project.
-    func confirmDelete(context: ModelContext, selectedProject: inout Project?) {
-        guard let project = pendingDeletion else { return }
-        context.delete(project)
+    ///   - selectedTopic: The app's active-topic state — cleared if it
+    ///     pointed at the deleted topic.
+    func confirmDelete(context: ModelContext, selectedTopic: inout Topic?) {
+        guard let topic = pendingDeletion else { return }
+        context.delete(topic)
         try? context.save()
-        if selectedProject == project {
-            selectedProject = nil
+        if selectedTopic == topic {
+            selectedTopic = nil
         }
         pendingDeletion = nil
         showDeleteConfirmation = false
@@ -104,38 +104,38 @@ final class SidebarViewModel {
     }
 
     /// Request a rename — shows the rename sheet pre-filled with the
-    /// project's current name.
+    /// topic's current name.
     ///
-    /// - Parameter project: The project to rename.
-    func requestRename(_ project: Project) {
-        pendingRename = project
-        renameProjectName = project.name
+    /// - Parameter topic: The topic to rename.
+    func requestRename(_ topic: Topic) {
+        pendingRename = topic
+        renameTopicName = topic.name
         errorMessage = nil
-        isRenamingProject = true
+        isRenamingTopic = true
     }
 
     /// Confirm and apply the pending rename.
     ///
     /// - Parameter context: The SwiftData `ModelContext` to save into.
     func confirmRename(context: ModelContext) {
-        let trimmed = renameProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = renameTopicName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            errorMessage = "Project name cannot be empty"
+            errorMessage = "Название темы не может быть пустым"
             return
         }
         pendingRename?.name = trimmed
         try? context.save()
 
-        renameProjectName = ""
+        renameTopicName = ""
         pendingRename = nil
-        isRenamingProject = false
+        isRenamingTopic = false
     }
 
     /// Cancel the pending rename.
     func cancelRename() {
         pendingRename = nil
-        renameProjectName = ""
-        isRenamingProject = false
+        renameTopicName = ""
+        isRenamingTopic = false
     }
 
     /// Dismiss the current error.
