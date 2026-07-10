@@ -118,14 +118,17 @@ public actor SSEClient {
             // Accumulates lines that belong to the current (incomplete) event block.
             var currentEventLines: [String] = []
 
+            var lineCount = 0
             for try await line in bytes.lines {
                 guard !Task.isCancelled else { break }
+                lineCount += 1
+                if lineCount <= 10 { print("📡 [SSE] Line \(lineCount): '\(line.prefix(100))'") }
 
                 if line.isEmpty {
-                    // Empty line signals the end of an SSE event block (the "\n\n" separator).
                     guard !currentEventLines.isEmpty else { continue }
 
                     let eventBlock = currentEventLines.joined(separator: "\n")
+                    print("📦 [SSE] Event block: \(eventBlock.prefix(200))")
                     currentEventLines.removeAll(keepingCapacity: true)
 
                     processEventBlock(eventBlock, decoder: decoder, continuation: continuation)
@@ -248,8 +251,16 @@ public actor SSEClient {
         _ message: SSEMessage,
         decoder: JSONDecoder
     ) -> RunEvent? {
-        guard let eventField = message.event else {
-            Logger.sse.warning("SSE event missing 'event' field")
+        // Event type: try SSE "event:" field first, then JSON "event" field
+        let eventField: String
+        if let sseEvent = message.event {
+            eventField = sseEvent
+        } else if let dataStr = message.data, let data = dataStr.data(using: .utf8),
+                  let envelope = try? decoder.decode(RunEventPayload.self, from: data),
+                  let jsonEvent = envelope.event {
+            eventField = jsonEvent
+        } else {
+            Logger.sse.warning("SSE event missing 'event' field (both SSE header and JSON)")
             return nil
         }
 
@@ -296,6 +307,7 @@ public actor SSEClient {
 /// `content` but no tool fields; a `tool_call` has `toolName` + `toolInput`
 /// but no `content`.
 private struct RunEventPayload: Decodable, Sendable {
+    let event: String?
     let content: String?
     let delta: String?
     let output: String?
@@ -306,6 +318,7 @@ private struct RunEventPayload: Decodable, Sendable {
     let error: String?
 
     enum CodingKeys: String, CodingKey {
+        case event
         case content
         case delta
         case output

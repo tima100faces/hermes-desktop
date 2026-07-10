@@ -72,7 +72,24 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            inputBarOverlay
+            VStack(spacing: 0) {
+                if viewModel.isStreaming || viewModel.errorMessage != nil {
+                    HStack(spacing: Space.sm) {
+                        if viewModel.isStreaming {
+                            Circle().fill(Color.hkAccent).frame(width: 8, height: 8)
+                            Text("Streaming (\(viewModel.streamingContent.count) chars)")
+                                .font(.hkCaption).foregroundStyle(Color.hkAccent)
+                        }
+                        if let err = viewModel.errorMessage {
+                            Text(err).font(.hkCaption).foregroundStyle(.red).lineLimit(2)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, Space.md).padding(.vertical, Space.xs)
+                    .background(Color.hkPaper2)
+                }
+                inputBarOverlay
+            }
         }
     }
 
@@ -144,7 +161,24 @@ struct ChatView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            inputBarOverlay
+            VStack(spacing: 0) {
+                if viewModel.isStreaming || viewModel.errorMessage != nil {
+                    HStack(spacing: Space.sm) {
+                        if viewModel.isStreaming {
+                            Circle().fill(Color.hkAccent).frame(width: 8, height: 8)
+                            Text("Streaming (\(viewModel.streamingContent.count) chars)")
+                                .font(.hkCaption).foregroundStyle(Color.hkAccent)
+                        }
+                        if let err = viewModel.errorMessage {
+                            Text(err).font(.hkCaption).foregroundStyle(.red).lineLimit(2)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, Space.md).padding(.vertical, Space.xs)
+                    .background(Color.hkPaper2)
+                }
+                inputBarOverlay
+            }
         }
     }
 
