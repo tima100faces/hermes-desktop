@@ -6,14 +6,15 @@ import Observation
 
 /// ViewModel for the main chat interface.
 ///
-/// Manages SSE streaming from the Hermes Runs API, message persistence via
-/// SwiftData, and real-time agent status badges. All properties are
-/// `@Observable`-driven so the SwiftUI view layer reacts automatically.
+/// Transport-agnostic: talks only to a `ConversationService`, which hides
+/// whether the conversation on screen is a `Topic` (Runs API) or a `Chat`
+/// (Sessions API) — see `docs/task-topics-and-chats.md` §Этап 2. Manages
+/// message persistence and real-time agent status badges; all properties
+/// are `@Observable`-driven so the SwiftUI view layer reacts automatically.
 ///
 /// ## Responsibilities
-/// - Sending user messages and creating agent runs
-/// - Consuming the SSE event stream (`text_delta`, `tool_call`, etc.)
-/// - Persisting messages via SwiftData (`ModelContext`)
+/// - Sending user messages and consuming the unified `RunEvent` stream
+/// - Persisting messages via the conversation service
 /// - Tracking running/completed/failed agent statuses
 /// - Partial-message capture on stop / new-message-while-streaming
 @MainActor
@@ -22,7 +23,7 @@ final class ChatViewModel {
 
     // MARK: - Published State
 
-    /// All messages for the current topic, in display order.
+    /// All messages for the current conversation, in display order.
     var messages: [Message] = []
 
     /// The current text in the input field (bound to a TextEditor).
@@ -43,43 +44,27 @@ final class ChatViewModel {
 
     // MARK: - Dependencies
 
-    /// The Hermes Runs API client (actor).
-    private let runsAPI: RunsAPIProtocol
-
-    /// The topic this chat session belongs to.
-    private let topic: Topic
-
-    /// The ID of the currently active run (nil when idle).
-    private var currentRunId: String?
+    /// The conversation this view model is driving — a `Topic` or `Chat`
+    /// behind a shared interface.
+    private let conversationService: ConversationService
 
     // MARK: - Initialization
 
-    /// Creates a new `ChatViewModel` bound to a topic.
+    /// Creates a new `ChatViewModel` bound to a conversation.
     ///
-    /// - Parameters:
-    ///   - runsAPI: The `RunsAPIProtocol` actor used for create/stream/stop operations.
-    ///   - topic: The `Topic` whose messages are managed.
-    init(runsAPI: RunsAPIProtocol, topic: Topic) {
-        self.runsAPI = runsAPI
-        self.topic = topic
+    /// - Parameter conversationService: The `Topic`- or `Chat`-backed
+    ///   service driving this conversation.
+    init(conversationService: ConversationService) {
+        self.conversationService = conversationService
     }
 
     // MARK: - Load Messages
 
-    /// Loads existing messages from SwiftData for the current topic.
+    /// Loads existing messages for the current conversation.
     ///
-    /// Messages are fetched sorted by `timestamp` ascending (oldest first).
-    ///
-    /// - Parameter context: The SwiftData `ModelContext` to fetch from.
-    func loadMessages(context: ModelContext) {
-        let key = topic.conversationKey
-        let descriptor = FetchDescriptor<Message>(
-            predicate: #Predicate { $0.topic?.conversationKey == key },
-            sortBy: [SortDescriptor(\.timestamp)]
-        )
-        if let loaded = try? context.fetch(descriptor) {
-            messages = loaded
-        }
+    /// - Parameter context: The SwiftData `ModelContext` to fetch/save with.
+    func loadMessages(context: ModelContext) async {
+        messages = await conversationService.loadMessages(context: context)
     }
 
     // MARK: - Send Message
@@ -91,8 +76,8 @@ final class ChatViewModel {
     /// 2. If a run is already streaming, stops it first and saves any partial
     ///    content as an assistant message.
     /// 3. Creates a `Message` with role `.user` and persists it.
-    /// 4. Calls `runsAPI.createRun(input:conversation:)` to start a new run.
-    /// 5. Calls `runsAPI.streamEvents(runId:)` and processes each event.
+    /// 4. Calls `conversationService.send(input:)` to start the turn and
+    ///    processes the resulting unified `RunEvent` stream.
     ///
     /// ## Event Handling
     /// | Event | Action |
@@ -109,13 +94,12 @@ final class ChatViewModel {
         guard !trimmed.isEmpty else { return }
 
         // --- Cancel any in-flight run first ---
-        if isStreaming, let runId = currentRunId {
-            try? await runsAPI.stopRun(runId: runId)
+        if isStreaming {
+            await conversationService.stop()
             savePartialContent(context: context)
             streamingContent = ""
             agentStatuses = []
             isStreaming = false
-            currentRunId = nil
         }
 
         let text = inputText
@@ -123,11 +107,12 @@ final class ChatViewModel {
 
         // --- Persist user message ---
         let userMsg = Message(content: text, role: .user)
-        userMsg.topic = topic
-        topic.lastActiveAt = Date()
-        context.insert(userMsg)
-        try? context.save()
+        conversationService.persist(userMsg, context: context)
         messages.append(userMsg)
+
+        if messages.count == 1 {
+            await conversationService.autoTitleIfNeeded(from: text, context: context)
+        }
 
         // --- Initialise streaming state ---
         isStreaming = true
@@ -135,13 +120,8 @@ final class ChatViewModel {
         errorMessage = nil
         agentStatuses = []
 
-        let conversation = topic.conversationKey
-
         do {
-            let response = try await runsAPI.createRun(input: text, conversation: conversation)
-            currentRunId = response.runId
-
-            let stream = await runsAPI.streamEvents(runId: response.runId)
+            let stream = try await conversationService.send(input: text)
 
             for await event in stream {
                 switch event.type {
@@ -174,23 +154,18 @@ final class ChatViewModel {
                     let assistantMsg = Message(
                         content: finalContent,
                         role: .assistant,
-                        runId: response.runId
+                        runId: conversationService.currentTurnId
                     )
-                    assistantMsg.topic = topic
-                    topic.lastActiveAt = Date()
-                    context.insert(assistantMsg)
-                    try? context.save()
+                    conversationService.persist(assistantMsg, context: context)
                     messages.append(assistantMsg)
                     streamingContent = ""
                     isStreaming = false
-                    currentRunId = nil
                     return
 
                 case .runFailed:
                     errorMessage = event.error ?? "Run failed"
                     streamingContent = ""
                     isStreaming = false
-                    currentRunId = nil
                     return
 
                 case .reasoningAvailable:
@@ -205,24 +180,19 @@ final class ChatViewModel {
                 let partialMsg = Message(
                     content: streamingContent,
                     role: .assistant,
-                    runId: response.runId
+                    runId: conversationService.currentTurnId
                 )
-                partialMsg.topic = topic
-                topic.lastActiveAt = Date()
-                context.insert(partialMsg)
-                try? context.save()
+                conversationService.persist(partialMsg, context: context)
                 messages.append(partialMsg)
             }
 
             streamingContent = ""
             isStreaming = false
-            currentRunId = nil
 
         } catch {
             errorMessage = error.localizedDescription
             streamingContent = ""
             isStreaming = false
-            currentRunId = nil
         }
     }
 
@@ -232,12 +202,12 @@ final class ChatViewModel {
     ///
     /// - Parameter context: The SwiftData `ModelContext` for persistence.
     func stopStreaming(context: ModelContext) {
-        guard let runId = currentRunId else { return }
-
-        // Fire-and-forget the stop request (we don't need to await the result
-        // here — the server will close the SSE stream).
+        // Fire-and-forget the stop request. For Topics this asks the server
+        // to cancel the run; for Chats (no server-side stop endpoint) this
+        // terminates the local stream so no further events are read —
+        // either way `sendMessage`'s `for await` loop ends shortly after.
         Task {
-            try? await runsAPI.stopRun(runId: runId)
+            await conversationService.stop()
         }
 
         savePartialContent(context: context)
@@ -245,7 +215,6 @@ final class ChatViewModel {
         streamingContent = ""
         agentStatuses = []
         isStreaming = false
-        currentRunId = nil
     }
 
     // MARK: - Helpers
@@ -254,10 +223,7 @@ final class ChatViewModel {
     private func savePartialContent(context: ModelContext) {
         guard !streamingContent.isEmpty else { return }
         let partialMsg = Message(content: streamingContent, role: .assistant)
-        partialMsg.topic = topic
-        topic.lastActiveAt = Date()
-        context.insert(partialMsg)
-        try? context.save()
+        conversationService.persist(partialMsg, context: context)
         messages.append(partialMsg)
     }
 }

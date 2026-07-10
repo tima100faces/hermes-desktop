@@ -12,7 +12,13 @@ final class SidebarViewModelTests: XCTestCase {
     var modelContainer: ModelContainer!
     var modelContext: ModelContext!
     var viewModel: SidebarViewModel!
-    var selectedTopic: Topic?
+    var selection: ConversationSelection?
+
+    /// Convenience accessor for assertions — `nil` unless `selection` is `.topic`.
+    var selectedTopic: Topic? {
+        if case .topic(let topic)? = selection { return topic }
+        return nil
+    }
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -23,14 +29,14 @@ final class SidebarViewModelTests: XCTestCase {
         modelContext = modelContainer.mainContext
 
         viewModel = SidebarViewModel()
-        selectedTopic = nil
+        selection = nil
     }
 
     override func tearDown() async throws {
         viewModel = nil
         modelContext = nil
         modelContainer = nil
-        selectedTopic = nil
+        selection = nil
     }
 
     // MARK: - Create Topic
@@ -40,7 +46,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert — topic persisted
         let descriptor = FetchDescriptor<Topic>()
@@ -55,7 +61,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertNotNil(selectedTopic)
@@ -68,7 +74,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.isCreatingTopic = true
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertTrue(viewModel.newTopicName.isEmpty)
@@ -80,7 +86,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = ""
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
@@ -90,8 +96,8 @@ final class SidebarViewModelTests: XCTestCase {
         let topics = try? modelContext.fetch(descriptor)
         XCTAssertEqual(topics?.count ?? 0, 0)
 
-        // selectedTopic should remain nil
-        XCTAssertNil(selectedTopic)
+        // selection should remain nil
+        XCTAssertNil(selection)
     }
 
     func testCreateTopicWhitespaceNameShowsError() {
@@ -99,7 +105,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "   \n  \t  "
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertEqual(viewModel.errorMessage, "Название темы не может быть пустым")
@@ -112,7 +118,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "My Topic"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertEqual(selectedTopic?.conversationKey, "my-topic")
@@ -123,7 +129,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "Hello! @World #2024"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert — only lowercase alphanumeric and hyphens
         XCTAssertEqual(selectedTopic?.conversationKey, "hello-world-2024")
@@ -134,7 +140,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "UPPERCASE Topic"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertEqual(selectedTopic?.conversationKey, "uppercase-topic")
@@ -145,7 +151,7 @@ final class SidebarViewModelTests: XCTestCase {
         viewModel.newTopicName = "A   B   C"
 
         // Act
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         XCTAssertEqual(selectedTopic?.conversationKey, "a---b---c")
@@ -156,44 +162,44 @@ final class SidebarViewModelTests: XCTestCase {
     func testDeleteTopicRemovesFromSwiftData() throws {
         // Arrange
         viewModel.newTopicName = "Delete Me"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         let topic = selectedTopic!
         viewModel.requestDelete(topic)
 
         // Act
-        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.confirmDelete(context: modelContext, selection: &selection)
 
         // Assert — topic removed
         let descriptor = FetchDescriptor<Topic>()
         let topics = try modelContext.fetch(descriptor)
         XCTAssertTrue(topics.isEmpty)
-        XCTAssertNil(selectedTopic)
+        XCTAssertNil(selection)
         XCTAssertFalse(viewModel.showDeleteConfirmation)
     }
 
     func testDeleteTopicClearsSelectionIfMatches() {
         // Arrange
         viewModel.newTopicName = "Target"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         let topic = selectedTopic!
         viewModel.requestDelete(topic)
 
         // Act
-        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.confirmDelete(context: modelContext, selection: &selection)
 
         // Assert
-        XCTAssertNil(selectedTopic)
+        XCTAssertNil(selection)
     }
 
     func testDeleteTopicDoesNotClearSelectionIfDifferent() throws {
         // Arrange — create two topics, select the second
         viewModel.newTopicName = "First"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         viewModel.newTopicName = "Second"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Now delete the first topic
         let descriptor = FetchDescriptor<Topic>(
@@ -203,7 +209,7 @@ final class SidebarViewModelTests: XCTestCase {
         let firstTopic = topics[0]
 
         viewModel.requestDelete(firstTopic)
-        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.confirmDelete(context: modelContext, selection: &selection)
 
         // Assert — selection unchanged (still "Second")
         XCTAssertEqual(selectedTopic?.name, "Second")
@@ -212,7 +218,7 @@ final class SidebarViewModelTests: XCTestCase {
     func testRequestDeleteShowsConfirmation() {
         // Arrange
         viewModel.newTopicName = "Temp"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
         let topic = selectedTopic!
 
         // Act
@@ -225,7 +231,7 @@ final class SidebarViewModelTests: XCTestCase {
     func testCancelDeleteHidesConfirmation() {
         // Arrange
         viewModel.newTopicName = "Temp"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         viewModel.requestDelete(selectedTopic!)
 
@@ -240,11 +246,11 @@ final class SidebarViewModelTests: XCTestCase {
 
     func testConfirmDeleteWithoutPendingDoesNothing() throws {
         // Act — no pending deletion set
-        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.confirmDelete(context: modelContext, selection: &selection)
 
         // Assert — no crash, state unchanged
         XCTAssertFalse(viewModel.showDeleteConfirmation)
-        XCTAssertNil(selectedTopic)
+        XCTAssertNil(selection)
     }
 
     // MARK: - Error Handling
@@ -252,7 +258,7 @@ final class SidebarViewModelTests: XCTestCase {
     func testClearError() {
         // Arrange
         viewModel.newTopicName = ""
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
         XCTAssertNotNil(viewModel.errorMessage)
 
         // Act
@@ -267,13 +273,13 @@ final class SidebarViewModelTests: XCTestCase {
     func testMultipleTopicsCreated() throws {
         // Arrange
         viewModel.newTopicName = "Alpha"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         viewModel.newTopicName = "Beta"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         viewModel.newTopicName = "Gamma"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert
         let descriptor = FetchDescriptor<Topic>()
@@ -287,11 +293,11 @@ final class SidebarViewModelTests: XCTestCase {
     func testCreateTopicPreservesExistingTopics() throws {
         // Arrange
         viewModel.newTopicName = "Existing"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Act
         viewModel.newTopicName = "New"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Assert — both exist
         let descriptor = FetchDescriptor<Topic>()
@@ -304,17 +310,17 @@ final class SidebarViewModelTests: XCTestCase {
     func testDeleteTopicClearsError() {
         // Arrange — trigger an error first
         viewModel.newTopicName = ""
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
         XCTAssertNotNil(viewModel.errorMessage)
 
         // Create a valid topic to delete
         viewModel.errorMessage = nil  // clear any residual error state
         viewModel.newTopicName = "Delete Me"
-        viewModel.createTopic(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.createTopic(context: modelContext, selection: &selection)
 
         // Act
         viewModel.requestDelete(selectedTopic!)
-        viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+        viewModel.confirmDelete(context: modelContext, selection: &selection)
 
         // Assert — deletion succeeded, no error
         XCTAssertNil(viewModel.errorMessage)

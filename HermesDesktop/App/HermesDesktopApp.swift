@@ -29,10 +29,10 @@ struct HermesDesktopApp: App {
     /// The global DI container — alive for the app's lifetime.
     @State private var appState = AppState()
 
-    /// Shared SwiftData container for topics and messages.
+    /// Shared SwiftData container for topics, chats, and messages.
     private let modelContainer: ModelContainer = {
         TopicMigrationService.migrateIfNeeded()
-        return try! ModelContainer(for: Topic.self, Message.self)
+        return try! ModelContainer(for: Topic.self, Chat.self, Message.self)
     }()
 
     // MARK: Body
@@ -91,8 +91,9 @@ private struct ContentView: View {
 
     let appState: AppState
 
-    /// The topic the user has selected in the sidebar.
-    @State private var selectedTopic: Topic?
+    /// The conversation the user has selected in the sidebar — a `Topic`
+    /// or a `Chat` behind one binding (see `ConversationSelection`).
+    @State private var selection: ConversationSelection?
 
     /// Whether the Cmd+K quick-switcher overlay is shown.
     @State private var isPaletteShown = false
@@ -100,15 +101,22 @@ private struct ContentView: View {
     @Query(sort: \Topic.lastActiveAt, order: .reverse)
     private var topics: [Topic]
 
+    @Query private var chats: [Chat]
+
     // MARK: Body
 
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
-                SidebarView(
-                    connectionMonitor: appState.connectionMonitor,
-                    selectedTopic: $selectedTopic
-                )
+                Group {
+                    if let sessionsAPI = appState.sessionsAPI {
+                        SidebarView(
+                            connectionMonitor: appState.connectionMonitor,
+                            selection: $selection,
+                            sessionsAPI: sessionsAPI
+                        )
+                    }
+                }
                 .frame(width: 220)
 
                 Rectangle()
@@ -117,10 +125,20 @@ private struct ContentView: View {
                     .ignoresSafeArea()
 
                 Group {
-                    if let topic = selectedTopic, let runsAPI = appState.runsAPI {
-                        ChatView(topic: topic, runsAPI: runsAPI)
-                            .id(topic.persistentModelID)
-                    } else {
+                    switch (selection, appState.runsAPI, appState.sessionsAPI) {
+                    case (.topic(let topic), let runsAPI?, _):
+                        ChatView(
+                            title: topic.name,
+                            conversationService: TopicConversationService(runsAPI: runsAPI, topic: topic)
+                        )
+                        .id(topic.persistentModelID)
+                    case (.chat(let chat), _, let sessionsAPI?):
+                        ChatView(
+                            title: chat.title,
+                            conversationService: ChatConversationService(sessionsAPI: sessionsAPI, chat: chat)
+                        )
+                        .id(chat.persistentModelID)
+                    default:
                         emptyDetail
                     }
                 }
@@ -133,7 +151,7 @@ private struct ContentView: View {
                 TopicPaletteView(
                     topics: topics,
                     onSelect: { topic in
-                        selectedTopic = topic
+                        selection = .topic(topic)
                         isPaletteShown = false
                     },
                     onDismiss: { isPaletteShown = false }
@@ -152,9 +170,8 @@ private struct ContentView: View {
 
     // MARK: Empty Detail
 
-    /// Placeholder shown when no topic is selected (first launch with
-    /// zero topics — otherwise the sidebar auto-selects the most
-    /// recent one).
+    /// Placeholder shown when no conversation is selected (first launch —
+    /// otherwise the sidebar auto-selects the most recently active one).
     @ViewBuilder
     private var emptyDetail: some View {
         VStack(spacing: Space.md) {
@@ -162,7 +179,7 @@ private struct ContentView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(Color.hkNeutral)
 
-            Text("Выбери тему")
+            Text(topics.isEmpty && chats.isEmpty ? "Начни первый чат" : "Выбери тему")
                 .font(.hkBody)
                 .foregroundStyle(Color.hkMuted)
         }

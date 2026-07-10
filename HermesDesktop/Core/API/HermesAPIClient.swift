@@ -179,6 +179,11 @@ extension HermesAPIClient {
     /// - `runStatus` → `GET /v1/runs/{runId}`
     /// - `runEvents` → `GET /v1/runs/{runId}/events`
     /// - `stopRun` → `POST /v1/runs/{runId}/stop`
+    /// - `sessionCreate` → `POST /api/sessions`
+    /// - `session` → `GET /api/sessions/{id}`
+    /// - `sessionUpdate` → `PATCH /api/sessions/{id}`
+    /// - `sessionDelete` → `DELETE /api/sessions/{id}`
+    /// - `sessionMessages` → `GET /api/sessions/{id}/messages`
     public enum Endpoint {
         /// Check API health.
         case health
@@ -198,6 +203,21 @@ extension HermesAPIClient {
         /// Request cancellation of a running run.
         case stopRun(runId: String)
 
+        /// Create a new, empty Sessions API session.
+        case sessionCreate
+
+        /// Fetch a session's metadata.
+        case session(id: String)
+
+        /// Rename a session's title.
+        case sessionUpdate(id: String, title: String)
+
+        /// Delete a session.
+        case sessionDelete(id: String)
+
+        /// Fetch a session's message history.
+        case sessionMessages(id: String)
+
         /// The URL path component (relative to `baseURL`).
         public var path: String {
             switch self {
@@ -213,20 +233,34 @@ extension HermesAPIClient {
                 return "/v1/runs/\(runId)/events"
             case .stopRun(let runId):
                 return "/v1/runs/\(runId)/stop"
+            case .sessionCreate:
+                return "/api/sessions"
+            case .session(let id):
+                return "/api/sessions/\(id)"
+            case .sessionUpdate(let id, _):
+                return "/api/sessions/\(id)"
+            case .sessionDelete(let id):
+                return "/api/sessions/\(id)"
+            case .sessionMessages(let id):
+                return "/api/sessions/\(id)/messages"
             }
         }
 
         /// The HTTP method for this endpoint.
         public var method: String {
             switch self {
-            case .health, .capabilities, .runStatus, .runEvents:
+            case .health, .capabilities, .runStatus, .runEvents, .session, .sessionMessages:
                 return "GET"
-            case .createRun, .stopRun:
+            case .createRun, .stopRun, .sessionCreate:
                 return "POST"
+            case .sessionUpdate:
+                return "PATCH"
+            case .sessionDelete:
+                return "DELETE"
             }
         }
 
-        /// Optional JSON body data. Returns `nil` for GET requests.
+        /// Optional JSON body data. Returns `nil` for GET/DELETE requests.
         public var body: Data? {
             switch self {
             case .createRun(let input, let conversation):
@@ -234,6 +268,11 @@ extension HermesAPIClient {
                     "input": input,
                     "conversation": conversation,
                 ]
+                return try? JSONSerialization.data(withJSONObject: payload)
+            case .sessionCreate:
+                return Data("{}".utf8)
+            case .sessionUpdate(_, let title):
+                let payload: [String: String] = ["title": title]
                 return try? JSONSerialization.data(withJSONObject: payload)
             default:
                 return nil

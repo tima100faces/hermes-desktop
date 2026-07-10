@@ -90,7 +90,7 @@ final class ChatViewModelTests: XCTestCase {
         modelContext.insert(topic)
         try modelContext.save()
 
-        viewModel = ChatViewModel(runsAPI: mockRunsAPI, topic: topic)
+        viewModel = ChatViewModel(conversationService: TopicConversationService(runsAPI: mockRunsAPI, topic: topic))
     }
 
     override func tearDown() async throws {
@@ -429,7 +429,7 @@ final class ChatViewModelTests: XCTestCase {
         try modelContext.save()
 
         // Act
-        viewModel.loadMessages(context: modelContext)
+        await viewModel.loadMessages(context: modelContext)
 
         // Assert
         XCTAssertEqual(viewModel.messages.count, 2)
@@ -453,7 +453,7 @@ final class ChatViewModelTests: XCTestCase {
         try modelContext.save()
 
         // Act
-        viewModel.loadMessages(context: modelContext)
+        await viewModel.loadMessages(context: modelContext)
 
         // Assert — only messages for test-topic
         XCTAssertEqual(viewModel.messages.count, 1)

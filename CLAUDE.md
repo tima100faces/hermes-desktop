@@ -52,9 +52,14 @@ make clean      # очистка .build и build/
 ```
 HermesDesktop/
   App/            — HermesDesktopApp (@main, ContentView), AppState (DI)
-  Core/API/       — HermesAPIClient (actor), RunsAPI, SSEClient,
+  Core/API/       — HermesAPIClient (actor), RunsAPI + SSEClient (Темы),
+                    SessionsAPI + SessionSSEClient (Чаты),
                     ConnectionMonitor (health-поллинг), APIError
   Core/Auth/      — KeychainManager
+  Core/Conversation/ — ConversationService (протокол, общий для Тем и
+                    Чатов) + TopicConversationService/ChatConversationService
+  Core/Migration/ — TopicMigrationService (разовый перенос старых
+                    Project-записей в Topic при первом запуске)
   Core/Sync/      — GitSyncService (git pull agents-hub)
   DesignSystem/   — Colors.swift, Typography.swift, Spacing.swift
                     ЕДИНСТВЕННЫЙ источник цветов/шрифтов/отступов
@@ -62,11 +67,16 @@ HermesDesktop/
     Chat/         — ChatView (+ InputBar, ThinkingIndicator,
                     AgentStatusRow), MessageBubble, CodeBlockView,
                     MarkdownRenderer, StreamingText, ChatViewModel
-    Sidebar/      — SidebarView, ProjectRow, CreateProjectSheet
+    Sidebar/      — SidebarView (секции Чаты/Темы), ConversationRowContent
+                    (общая строка), TopicRow/ChatRow, CreateTopicSheet,
+                    RenameTopicSheet/RenameChatSheet, TopicPaletteView
     Settings/     — SettingsView (секция General — точка роста настроек)
     Onboarding/   — OnboardingView
-  Models/         — SwiftData: Project, Message; AgentStatus
+  Models/         — SwiftData: Topic, Chat, Message; AgentStatus;
+                    ConversationSelection (.topic/.chat — общий выбор
+                    в сайдбаре)
 docs/UI-SPEC.md   — дизайн-спека (ЗАКОН для UI-кода)
+docs/task-topics-and-chats.md — задача Темы/Чаты (Этапы 0–2)
 ```
 
 ## Железные правила UI

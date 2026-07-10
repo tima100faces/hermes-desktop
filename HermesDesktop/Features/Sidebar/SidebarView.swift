@@ -7,8 +7,9 @@ import SwiftData
 // HStack (not NavigationSplitView) so macOS system materials never
 // override the hkPanel background.
 //
-// The topic list is a ScrollView + buttons, NOT a List: the native
-// macOS List draws its own full-width selection highlight on top of
+// Two sections, Чаты above Темы (docs/task-topics-and-chats.md §Этап 2).
+// Both lists are ScrollView + buttons, NOT List: the native macOS List
+// draws its own full-width selection highlight on top of
 // listRowBackground, which is impossible to disable cleanly. Do not
 // convert this back to List.
 
@@ -18,24 +19,41 @@ struct SidebarView: View {
     /// and the unconfigured state work without one.
     var connectionMonitor: ConnectionMonitor?
 
-    /// The app's single source of truth for which topic is active —
+    /// The app's single source of truth for which conversation is active —
     /// shared with ContentView so the sidebar highlight stays in sync
-    /// regardless of how the topic changed (sidebar click, Cmd+K
+    /// regardless of how the selection changed (sidebar click, Cmd+K
     /// palette, etc).
-    @Binding var selectedTopic: Topic?
+    @Binding var selection: ConversationSelection?
 
     @State private var viewModel = SidebarViewModel()
+    @State private var chatViewModel: ChatSidebarViewModel
 
     /// The topic currently under the pointer — reveals its "…" menu.
     @State private var hoveredTopic: Topic?
 
+    /// The chat currently under the pointer — reveals its "…" menu.
+    @State private var hoveredChat: Chat?
+
     /// Agent display name — editable in Settings → General.
     @AppStorage("agent_name") private var agentName: String = "Ржавчик"
+
+    @Query(sort: \Chat.lastActiveAt, order: .reverse)
+    private var chats: [Chat]
 
     @Query(sort: \Topic.lastActiveAt, order: .reverse)
     private var topics: [Topic]
 
     @Environment(\.modelContext) private var modelContext
+
+    init(
+        connectionMonitor: ConnectionMonitor?,
+        selection: Binding<ConversationSelection?>,
+        sessionsAPI: SessionsAPIProtocol
+    ) {
+        self.connectionMonitor = connectionMonitor
+        self._selection = selection
+        self._chatViewModel = State(initialValue: ChatSidebarViewModel(sessionsAPI: sessionsAPI))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,63 +61,25 @@ struct SidebarView: View {
             // (the window uses .hiddenTitleBar).
             Color.clear.frame(height: 36)
 
-            // Header
-            HStack {
-                Text("Темы")
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.hkNeutral)
-                    .textCase(.uppercase)
-                Spacer()
-                Button(action: { viewModel.isCreatingTopic = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.hkNeutral)
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .help("Новая тема")
-            }
-            .padding(.horizontal, Space.md)
-            .padding(.bottom, Space.sm)
-
-            // Topic list — custom selection, no system List highlight.
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(topics) { topic in
-                        HStack(spacing: 0) {
-                            Button {
-                                selectedTopic = topic
-                            } label: {
-                                TopicRow(
-                                    topic: topic,
-                                    isSelected: selectedTopic == topic
-                                )
-                            }
-                            .buttonStyle(.plain)
+                    sectionHeader(
+                        title: "Чаты",
+                        help: "Новый чат",
+                        action: { Task { await createChat() } }
+                    )
+                    ForEach(chats) { chat in
+                        chatRow(chat)
+                    }
 
-                            // Sibling of the selection Button (not nested in
-                            // its label) so the menu stays clickable.
-                            if hoveredTopic == topic {
-                                TopicMenuButton(
-                                    onRename: { viewModel.requestRename(topic) },
-                                    onDelete: { viewModel.requestDelete(topic) }
-                                )
-                                .padding(.trailing, Space.xs)
-                            }
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selectedTopic == topic
-                                      ? Color.hkAccentDim
-                                      : Color.clear)
-                        )
-                        .onHover { hovering in
-                            hoveredTopic = hovering ? topic : (hoveredTopic == topic ? nil : hoveredTopic)
-                        }
-                        .contextMenu {
-                            contextMenuActions(for: topic)
-                        }
+                    sectionHeader(
+                        title: "Темы",
+                        help: "Новая тема",
+                        action: { viewModel.isCreatingTopic = true }
+                    )
+                    .padding(.top, Space.sm)
+                    ForEach(topics) { topic in
+                        topicRow(topic)
                     }
                 }
                 .padding(.horizontal, Space.sm)
@@ -128,26 +108,147 @@ struct SidebarView: View {
         }
         .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingTopic) {
-            CreateTopicSheet(viewModel: viewModel, modelContext: modelContext, selectedTopic: $selectedTopic)
+            CreateTopicSheet(viewModel: viewModel, modelContext: modelContext, selection: $selection)
         }
         .sheet(isPresented: $viewModel.isRenamingTopic) {
             RenameTopicSheet(viewModel: viewModel, modelContext: modelContext)
         }
+        .sheet(isPresented: $chatViewModel.isRenamingChat) {
+            RenameChatSheet(viewModel: chatViewModel, modelContext: modelContext)
+        }
         .alert("Удалить тему?", isPresented: $viewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
             Button("Delete", role: .destructive) {
-                viewModel.confirmDelete(context: modelContext, selectedTopic: &selectedTopic)
+                viewModel.confirmDelete(context: modelContext, selection: &selection)
             }
         } message: {
             Text("Тема и вся переписка будут удалены навсегда.")
         }
-        .onAppear {
-            // Auto-open the most recent topic on launch, so the app
-            // starts in a chat instead of the empty placeholder
-            // (docs/UI-SPEC.md §9).
-            if selectedTopic == nil, let mostRecent = topics.first {
-                selectedTopic = mostRecent
+        .alert("Удалить чат?", isPresented: $chatViewModel.showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { chatViewModel.cancelDelete() }
+            Button("Delete", role: .destructive) {
+                Task {
+                    let deleted = await chatViewModel.confirmDelete(context: modelContext)
+                    if case .chat(let selected) = selection, selected == deleted {
+                        selection = nil
+                    }
+                }
             }
+        } message: {
+            Text("Чат будет удалён навсегда.")
+        }
+        .onAppear {
+            // Auto-open the most recently active conversation on launch, so
+            // the app starts in a chat instead of the empty placeholder
+            // (docs/UI-SPEC.md §9) — whichever of the two lists is freshest.
+            guard selection == nil else { return }
+            switch (chats.first, topics.first) {
+            case (let chat?, let topic?):
+                selection = chat.lastActiveAt > topic.lastActiveAt ? .chat(chat) : .topic(topic)
+            case (let chat?, nil):
+                selection = .chat(chat)
+            case (nil, let topic?):
+                selection = .topic(topic)
+            case (nil, nil):
+                break
+            }
+        }
+    }
+
+    // MARK: - Section Header
+
+    private func sectionHeader(title: String, help: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(Color.hkNeutral)
+                .textCase(.uppercase)
+            Spacer()
+            Button(action: action) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.hkNeutral)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .help(help)
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.bottom, Space.sm)
+    }
+
+    // MARK: - Rows
+
+    private func topicRow(_ topic: Topic) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                selection = .topic(topic)
+            } label: {
+                TopicRow(topic: topic, isSelected: selection == .topic(topic))
+            }
+            .buttonStyle(.plain)
+
+            // Sibling of the selection Button (not nested in its label) so
+            // the menu stays clickable.
+            if hoveredTopic == topic {
+                ConversationMenuButton(
+                    onRename: { viewModel.requestRename(topic) },
+                    onDelete: { viewModel.requestDelete(topic) },
+                    help: "Действия с темой"
+                )
+                .padding(.trailing, Space.xs)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selection == .topic(topic) ? Color.hkAccentDim : Color.clear)
+        )
+        .onHover { hovering in
+            hoveredTopic = hovering ? topic : (hoveredTopic == topic ? nil : hoveredTopic)
+        }
+        .contextMenu {
+            Button("Rename") { viewModel.requestRename(topic) }
+            Button("Delete", role: .destructive) { viewModel.requestDelete(topic) }
+        }
+    }
+
+    private func chatRow(_ chat: Chat) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                selection = .chat(chat)
+            } label: {
+                ChatRow(chat: chat, isSelected: selection == .chat(chat))
+            }
+            .buttonStyle(.plain)
+
+            if hoveredChat == chat {
+                ConversationMenuButton(
+                    onRename: { chatViewModel.requestRename(chat) },
+                    onDelete: { chatViewModel.requestDelete(chat) },
+                    help: "Действия с чатом"
+                )
+                .padding(.trailing, Space.xs)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selection == .chat(chat) ? Color.hkAccentDim : Color.clear)
+        )
+        .onHover { hovering in
+            hoveredChat = hovering ? chat : (hoveredChat == chat ? nil : hoveredChat)
+        }
+        .contextMenu {
+            Button("Rename") { chatViewModel.requestRename(chat) }
+            Button("Delete", role: .destructive) { chatViewModel.requestDelete(chat) }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func createChat() async {
+        if let chat = await chatViewModel.createChat(context: modelContext) {
+            selection = .chat(chat)
         }
     }
 
@@ -168,32 +269,38 @@ struct SidebarView: View {
         default:       return "Hermes API: checking…"
         }
     }
-
-    @ViewBuilder
-    private func contextMenuActions(for topic: Topic) -> some View {
-        Button("Rename") {
-            viewModel.requestRename(topic)
-        }
-        Button("Delete", role: .destructive) {
-            viewModel.requestDelete(topic)
-        }
-    }
 }
 
 // MARK: - Preview
 
 #Preview {
-    SidebarView(selectedTopic: .constant(nil))
-        .modelContainer(previewContainer)
-        .frame(width: 220, height: 400)
+    SidebarView(
+        connectionMonitor: nil,
+        selection: .constant(nil),
+        sessionsAPI: PreviewSessionsAPI()
+    )
+    .modelContainer(previewContainer)
+    .frame(width: 220, height: 400)
 }
 
 @MainActor
 private let previewContainer: ModelContainer = {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Topic.self, configurations: config)
+    let container = try! ModelContainer(for: Topic.self, Chat.self, configurations: config)
     let topic = Topic(name: "Sample Topic", conversationKey: "sample-topic")
     container.mainContext.insert(topic)
     try? container.mainContext.save()
     return container
 }()
+
+/// No-op `SessionsAPIProtocol` stub — previews never trigger chat CRUD.
+private actor PreviewSessionsAPI: SessionsAPIProtocol {
+    func createSession() async throws -> SessionInfo { SessionInfo(id: "preview", title: nil) }
+    func getSession(id: String) async throws -> SessionInfo { SessionInfo(id: id, title: nil) }
+    func renameSession(id: String, title: String) async throws -> SessionInfo { SessionInfo(id: id, title: title) }
+    func deleteSession(id: String) async throws {}
+    func getMessages(sessionId: String) async throws -> [SessionMessage] { [] }
+    func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+        (AsyncStream { $0.finish() }, {})
+    }
+}

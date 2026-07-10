@@ -1,16 +1,15 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - CreateTopicSheet
+// MARK: - RenameChatSheet
 
-/// A small modal sheet for entering a new topic name.
-struct CreateTopicSheet: View {
+/// A small modal sheet for editing an existing chat's title.
+struct RenameChatSheet: View {
 
     // MARK: Dependencies
 
-    @Bindable var viewModel: SidebarViewModel
+    @Bindable var viewModel: ChatSidebarViewModel
     let modelContext: ModelContext
-    @Binding var selection: ConversationSelection?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -18,11 +17,11 @@ struct CreateTopicSheet: View {
 
     var body: some View {
         VStack(spacing: Space.md) {
-            Text("Новая тема")
+            Text("Переименовать чат")
                 .font(.hkTitleEm)
                 .foregroundColor(.hkInk)
 
-            TextField("Название темы", text: $viewModel.newTopicName)
+            TextField("Название чата", text: $viewModel.renameChatName)
                 .textFieldStyle(.plain)
                 .font(.hkBody)
                 .foregroundColor(.hkInk)
@@ -34,7 +33,7 @@ struct CreateTopicSheet: View {
                         .stroke(Color.hkRule, lineWidth: 1)
                 )
                 .onSubmit {
-                    createAndDismiss()
+                    renameAndDismiss()
                 }
 
             if let error = viewModel.errorMessage {
@@ -50,18 +49,17 @@ struct CreateTopicSheet: View {
 
             HStack(spacing: Space.sm) {
                 Button("Cancel", role: .cancel) {
-                    viewModel.newTopicName = ""
-                    viewModel.clearError()
+                    viewModel.cancelRename()
                     dismiss()
                 }
                 .buttonStyle(.bordered)
 
-                Button("Create") {
-                    createAndDismiss()
+                Button("Save") {
+                    renameAndDismiss()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.hkAccent)
-                .disabled(viewModel.newTopicName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(viewModel.renameChatName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(Space.lg)
@@ -71,27 +69,12 @@ struct CreateTopicSheet: View {
 
     // MARK: - Actions
 
-    private func createAndDismiss() {
-        viewModel.createTopic(context: modelContext, selection: &selection)
-        if viewModel.errorMessage == nil {
-            dismiss()
+    private func renameAndDismiss() {
+        Task {
+            await viewModel.confirmRename(context: modelContext)
+            if viewModel.errorMessage == nil {
+                dismiss()
+            }
         }
     }
-}
-
-// MARK: - Preview
-
-#Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Topic.self,
-        configurations: config
-    )
-    let context = container.mainContext
-
-    CreateTopicSheet(
-        viewModel: SidebarViewModel(),
-        modelContext: context,
-        selection: .constant(nil)
-    )
 }

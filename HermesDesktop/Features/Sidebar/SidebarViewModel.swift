@@ -44,9 +44,9 @@ final class SidebarViewModel {
     ///
     /// - Parameters:
     ///   - context: The SwiftData `ModelContext` to insert into.
-    ///   - selectedTopic: The app's active-topic state — set to the
+    ///   - selection: The app's active-conversation state — set to the
     ///     newly created topic on success.
-    func createTopic(context: ModelContext, selectedTopic: inout Topic?) {
+    func createTopic(context: ModelContext, selection: inout ConversationSelection?) {
         let trimmed = newTopicName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             errorMessage = "Название темы не может быть пустым"
@@ -69,7 +69,7 @@ final class SidebarViewModel {
 
         newTopicName = ""
         isCreatingTopic = false
-        selectedTopic = topic
+        selection = .topic(topic)
     }
 
     /// Request deletion — shows confirmation alert first.
@@ -84,14 +84,14 @@ final class SidebarViewModel {
     ///
     /// - Parameters:
     ///   - context: The SwiftData `ModelContext` to delete from.
-    ///   - selectedTopic: The app's active-topic state — cleared if it
+    ///   - selection: The app's active-conversation state — cleared if it
     ///     pointed at the deleted topic.
-    func confirmDelete(context: ModelContext, selectedTopic: inout Topic?) {
+    func confirmDelete(context: ModelContext, selection: inout ConversationSelection?) {
         guard let topic = pendingDeletion else { return }
         context.delete(topic)
         try? context.save()
-        if selectedTopic == topic {
-            selectedTopic = nil
+        if case .topic(let selected) = selection, selected == topic {
+            selection = nil
         }
         pendingDeletion = nil
         showDeleteConfirmation = false

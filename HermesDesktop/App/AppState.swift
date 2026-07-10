@@ -35,8 +35,13 @@ final class AppState {
     private(set) var apiClient: HermesAPIClient?
 
     /// The Runs API — set after successful initialisation.
-    /// `nil` when not configured.
+    /// `nil` when not configured. Backs `Topic` conversations, unchanged
+    /// from before Этап 2.
     private(set) var runsAPI: RunsAPI?
+
+    /// The Sessions API — set after successful initialisation.
+    /// `nil` when not configured. Backs `Chat` conversations.
+    private(set) var sessionsAPI: SessionsAPI?
 
     /// Polls the Hermes API health endpoint for the sidebar status dot.
     /// `nil` when not configured.
@@ -85,9 +90,11 @@ final class AppState {
         let client = HermesAPIClient(baseURL: url, keychainManager: keychainManager)
         let sseClient = SSEClient()
         let runs = RunsAPI(apiClient: client, sseClient: sseClient)
+        let sessions = SessionsAPI(apiClient: client)
 
         self.apiClient = client
         self.runsAPI = runs
+        self.sessionsAPI = sessions
         self.isConfigured = true
 
         // --- Start health polling for the sidebar status dot -------------------

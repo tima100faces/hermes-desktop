@@ -15,11 +15,12 @@ struct ChatView: View {
     /// "am I scrolled to the bottom" signal without a scroll-offset API.
     @State private var isAtBottom = true
 
-    private let topic: Topic
+    /// Header title — the topic's or chat's display name.
+    private let title: String
 
-    init(topic: Topic, runsAPI: RunsAPIProtocol) {
-        self.topic = topic
-        _viewModel = State(initialValue: ChatViewModel(runsAPI: runsAPI, topic: topic))
+    init(title: String, conversationService: ConversationService) {
+        self.title = title
+        _viewModel = State(initialValue: ChatViewModel(conversationService: conversationService))
     }
 
     var body: some View {
@@ -27,8 +28,8 @@ struct ChatView: View {
             chatBody(availableHeight: geometry.size.height)
         }
         .background(Color.hkPage)
-        .onAppear {
-            viewModel.loadMessages(context: modelContext)
+        .task {
+            await viewModel.loadMessages(context: modelContext)
         }
     }
 
@@ -148,7 +149,7 @@ struct ChatView: View {
     /// Topic title bar with a live subagent badge.
     private var header: some View {
         HStack {
-            Text(topic.name)
+            Text(title)
                 .font(.hkBody.weight(.medium))
                 .foregroundStyle(Color.hkInk)
                 .lineLimit(1)
