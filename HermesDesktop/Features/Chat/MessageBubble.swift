@@ -44,7 +44,7 @@ struct MessageBubble: View {
                     .font(.hkCaption)
                     .foregroundStyle(Color.hkMuted)
             }
-            .frame(maxWidth: 420, alignment: isUser ? .trailing : .leading)
+            .frame(maxWidth: 560, alignment: isUser ? .trailing : .leading)
 
             if isAssistant {
                 Spacer(minLength: 60)
@@ -72,9 +72,9 @@ struct MessageBubble: View {
         Text(message.content)
             .font(.hkBody)
             .foregroundStyle(isUser ? .white : Color.hkInk)
-            .padding(.horizontal, Space.md)
+            .padding(.horizontal, Space.lg)
             .padding(.vertical, Space.sm)
-            .background(isUser ? Color.hkAccent : Color.hkSurface)
+            .background(isUser ? Color.hkAccent : Color.hkSurface2)
             .clipShape(BubbleShape(isUser: isUser))
     }
 }
