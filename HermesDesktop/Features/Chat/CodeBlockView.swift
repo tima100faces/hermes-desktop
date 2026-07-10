@@ -15,6 +15,10 @@ struct CodeBlockView: View {
     @State private var justCopied = false
     @State private var isHoveringCopy = false
 
+    private var highlightedCode: AttributedString {
+        SyntaxHighlighter.highlight(code: code, language: language)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -24,10 +28,9 @@ struct CodeBlockView: View {
                 .frame(height: 1)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
+                Text(highlightedCode)
                     .font(.hkCodeBody)
                     .lineSpacing(LineSpacing.body)
-                    .foregroundStyle(Color.hkMuted)
                     .textSelection(.enabled)
                     .padding(Space.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
