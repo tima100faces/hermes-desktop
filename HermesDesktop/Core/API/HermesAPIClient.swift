@@ -11,7 +11,7 @@ public actor HermesAPIClient {
     // MARK: - Properties
 
     /// Base URL for all API requests.
-    private let baseURL: URL
+    public let baseURL: URL
 
     /// Keychain manager for reading the Bearer token.
     private let keychainManager: KeychainManager
@@ -37,6 +37,18 @@ public actor HermesAPIClient {
     }
 
     // MARK: - Public API
+
+    /// Returns the current Bearer token for authentication.
+    ///
+    /// Used by `RunsAPI` to pass a token to `SSEClient` for SSE streaming.
+    /// - Returns: The stored Bearer token string.
+    /// - Throws: `APIError.unauthorized` if no token is stored.
+    public func authenticationToken() async throws -> String {
+        guard let token = try await keychainManager.read() else {
+            throw APIError.unauthorized
+        }
+        return token
+    }
 
     /// Performs a typed API request.
     ///

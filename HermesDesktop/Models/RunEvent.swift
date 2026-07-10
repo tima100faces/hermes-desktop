@@ -3,7 +3,7 @@ import Foundation
 // MARK: - RunEventType
 
 /// Types of SSE events emitted by the Hermes Runs API.
-enum RunEventType: String, Codable, Sendable {
+public enum RunEventType: String, Codable, Sendable {
     /// A text delta (token) in the streaming response.
     case textDelta = "text_delta"
     /// The agent called a tool.
@@ -21,7 +21,7 @@ enum RunEventType: String, Codable, Sendable {
 /// A single SSE event from a Hermes run stream.
 ///
 /// Not stored in SwiftData — used ephemerally during streaming.
-struct RunEvent: Identifiable, Equatable, Sendable {
+public struct RunEvent: Identifiable, Equatable, Sendable {
     let id: UUID
     let type: RunEventType
     let content: String?
@@ -30,7 +30,7 @@ struct RunEvent: Identifiable, Equatable, Sendable {
     let toolOutput: String?
     let error: String?
 
-    init(
+    public init(
         id: UUID = UUID(),
         type: RunEventType,
         content: String? = nil,
