@@ -215,11 +215,14 @@ public actor SessionSSEClient {
 
     /// Maps a Sessions API SSE event name to the shared `RunEventType`.
     ///
-    /// `docs/task-topics-and-chats.md` names four events for one agent
-    /// turn: `assistant.delta`, `tool.started`, `tool.completed`,
-    /// `run.completed`. A `run.failed` case is included defensively,
-    /// mirroring the Runs dialect, but is unverified against the live
-    /// server.
+    /// Verified against a live `chat/stream` call (2026-07-11): the server
+    /// also sends `run.started`, `message.started`, `tool.progress`
+    /// (reasoning/"_thinking" updates), `assistant.completed`, and a final
+    /// `done` after `run.completed` — all intentionally unmapped (`nil`)
+    /// since `run.completed` alone is enough to end a turn, matching how
+    /// the Runs dialect already ignores its `reasoning.available` event.
+    /// A `run.failed` case is included defensively, mirroring the Runs
+    /// dialect, but wasn't produced by any verified call.
     private static func sessionEventType(for raw: String) -> RunEventType? {
         switch raw {
         case "assistant.delta": return .textDelta
@@ -272,7 +275,15 @@ public actor SessionSSEClient {
             type: eventType,
             content: unifiedContent,
             toolName: payload?.toolName,
-            toolInput: payload?.toolInput,
+            // `tool.started` carries a human-readable one-liner in `preview`
+            // (e.g. "echo hello-from-test") — there's no plain-string
+            // "tool_input" field; the raw arguments come as a nested `args`
+            // object, not worth decoding just for a status-line display.
+            toolInput: payload?.preview,
+            // `tool.completed` doesn't carry the result — the actual output
+            // only appears later, nested in `run.completed`'s `messages`
+            // array. Left `nil` here; the status still flips to `.completed`
+            // (see `RunEventType.toolResult`), just without a progress line.
             toolOutput: payload?.toolOutput,
             error: payload?.error
         )
@@ -299,10 +310,13 @@ private final class StreamControl: @unchecked Sendable {
 // MARK: - SessionEventPayload
 
 /// Flexible decoding structure for Sessions API chat-stream `data:` JSON
-/// payloads. Field names mirror the Runs API dialect's payload shape
-/// (`RunEventPayload` in `SSEClient.swift`) — a reasonable inference given
-/// both APIs likely share the same underlying agent/tool execution code,
-/// but not verified against a live `chat/stream` response.
+/// payloads. Verified against a live `chat/stream` call (2026-07-11):
+/// `assistant.delta` carries `delta`, `assistant.completed`/`run.completed`
+/// carry `content`, `tool.started` carries `tool_name` + a human-readable
+/// `preview` (the actual arguments come as a nested `args` object, not
+/// decoded here), and `tool.completed` carries only `tool_name` (`preview`/
+/// `args` are `null` — the result itself only shows up later, nested in
+/// `run.completed`'s `messages` array).
 private struct SessionEventPayload: Decodable, Sendable {
     let event: String?
     let content: String?
@@ -310,7 +324,7 @@ private struct SessionEventPayload: Decodable, Sendable {
     let output: String?
     let text: String?
     let toolName: String?
-    let toolInput: String?
+    let preview: String?
     let toolOutput: String?
     let error: String?
 
@@ -321,7 +335,7 @@ private struct SessionEventPayload: Decodable, Sendable {
         case output
         case text
         case toolName = "tool_name"
-        case toolInput = "tool_input"
+        case preview
         case toolOutput = "tool_output"
         case error
     }

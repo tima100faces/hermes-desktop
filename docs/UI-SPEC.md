@@ -279,15 +279,22 @@
 1. Кнопка Retry в hover-ряду (повторная отправка последнего запроса) —
    под вопросом, владелец не уверен, что нужно (2026-07-10). Не браться
    без явной просьбы.
-2. ⚠️ Проверить вживую формат `POST /api/sessions/{id}/chat/stream`:
-   имя JSON-поля тела запроса (сейчас `message` — предположение) и
-   имена полей в `data:` для `tool.started`/`tool.completed` (сейчас
-   переиспользованы поля из диалекта Runs API — `tool_name`/
-   `tool_input`/`tool_output`) не были подтверждены реальным вызовом,
-   так как это стоит токенов и трогает настоящего агента (2026-07-10,
-   `SessionSSEClient`/`SessionsAPI.streamChat`). Отправка текста
-   (`assistant.delta`) уже проверялась на других эндпоинтах и должна
-   работать; под вопросом именно tool-события.
+2. ~~Проверить вживую формат `POST /api/sessions/{id}/chat/stream`~~ —
+   проверено реальным вызовом (2026-07-11, два теста: обычный ответ и
+   ответ с вызовом инструмента `terminal`). Тело запроса `{"message":
+   "..."}` подтвердилось. Реальных событий оказалось больше, чем
+   в задаче: `run.started`, `message.started`, `assistant.delta`,
+   `tool.started`, `tool.progress` (для `_thinking`/рассуждений),
+   `tool.completed`, `assistant.completed`, `run.completed`, `done`.
+   `tool.started`/`tool.completed`/`assistant.delta`/`run.completed`
+   ведут себя так, как и предполагалось; остальные осознанно не
+   маппятся — `run.completed` сам по себе достаточен, чтобы завершить
+   ход (см. `SessionSSEClient.sessionEventType`). Единственная реальная
+   поправка: превью инструмента в `tool.started` лежит в поле
+   `preview` (человекочитаемая строка), а не `tool_input` — аргументы
+   идут отдельным вложенным объектом `args`, который не разбирали.
+   `tool.completed` результата не несёт (`preview`/`args` там `null`)
+   — сам результат виден только позже, внутри `run.completed.messages`.
 3. Вопрос переноса старых Тем на Sessions API — отдельная задача, не
    этот этап. См. эксперимент в конце `docs/task-topics-and-chats.md`
    §Этап 2: сессия темы на сервере не хранит `conversationKey` и не
