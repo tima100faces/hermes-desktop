@@ -28,8 +28,8 @@ struct AgentStatus: Identifiable, Equatable, Sendable {
     let name: String
 
     /// Current lifecycle state.
-    let state: AgentState
+    var state: AgentState
 
     /// What the agent is doing right now (e.g. "Reviewing file...", "Running tests...").
-    let progress: String?
+    var progress: String?
 }
