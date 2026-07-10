@@ -117,7 +117,12 @@ struct ChatView: View {
                 .onChange(of: viewModel.isStreaming) { _, streaming in
                     if streaming { proxy.scrollTo("streaming", anchor: .bottom) }
                 }
-                .onChange(of: viewModel.streamingContent) { _, _ in
+                .onChange(of: viewModel.streamingUpdateTick) { _, _ in
+                    // Keyed on the unthrottled tick, not streamingContent
+                    // itself (throttled for render/parse cost) — auto-follow
+                    // must keep pace with every delta, like a messaging app,
+                    // or the scroll noticeably lags behind by the time a
+                    // long response finishes.
                     proxy.scrollTo("streaming", anchor: .bottom)
                 }
                 .onChange(of: viewModel.messages.count) { _, _ in

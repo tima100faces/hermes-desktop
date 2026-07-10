@@ -37,6 +37,12 @@ final class ChatViewModel {
     /// streaming bubble.
     var streamingContent: String = ""
 
+    /// Increments on every `.textDelta`, unthrottled — the view scrolls to
+    /// follow this instead of `streamingContent`, so auto-follow keeps
+    /// tracking the bottom of the response even though the visible text
+    /// itself only republishes every `streamingPublishInterval`.
+    private(set) var streamingUpdateTick: Int = 0
+
     /// Status badges for subagents shown during a run.
     var agentStatuses: [AgentStatus] = []
 
@@ -156,6 +162,7 @@ final class ChatViewModel {
                 case .textDelta:
                     if let content = event.content {
                         pendingStreamingContent += content
+                        streamingUpdateTick += 1
                         publishStreamingContentIfDue()
                     }
 
