@@ -43,7 +43,14 @@ final class MockAPIURLProtocol: URLProtocol {
 final class HermesAPIClientTests: XCTestCase {
 
     private let baseURL = URL(string: "https://api.hermes.example")!
-    private let keychain = KeychainManager()
+    // Dedicated service/account, isolated from the real one — this test used
+    // to run against the production KeychainManager() default, which meant
+    // every test run overwrote and then deleted the user's real stored API
+    // key. Never point this back at the production defaults.
+    private let keychain = KeychainManager(
+        service: "com.hermes-desktop.api-key.tests",
+        account: "hermes-api-tests"
+    )
 
     override func setUp() async throws {
         // Store a valid token so `authenticationToken()` does not throw.

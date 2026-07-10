@@ -15,12 +15,20 @@ public actor KeychainManager {
 
     // MARK: - Constants
 
-    private let service = "com.hermes-desktop.api-key"
-    private let account = "hermes-api"
+    private let service: String
+    private let account: String
 
     // MARK: - Initialization
 
-    public init() {}
+    /// - Parameters:
+    ///   - service: Keychain service name. Defaults to the production
+    ///     value — override only for test isolation, so tests never read,
+    ///     overwrite, or delete the user's real stored API key.
+    ///   - account: Keychain account name. Defaults to the production value.
+    public init(service: String = "com.hermes-desktop.api-key", account: String = "hermes-api") {
+        self.service = service
+        self.account = account
+    }
 
     // MARK: - Public Methods
 
