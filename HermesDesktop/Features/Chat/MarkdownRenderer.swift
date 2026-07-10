@@ -4,12 +4,10 @@
 //
 // Uses a hybrid approach:
 //   1. Splits on ``` fences to extract fenced code blocks
-//   2. Renders code blocks with monospaced font + surface background
+//   2. Renders code blocks via CodeBlockView (language chip + copy button)
 //   3. Renders the remaining inline content using AttributedString(markdown:)
-//      with .fullyParsed to handle blockquotes, lists, links, and inline
-//      formatting (bold, italic, inline code).
 //
-// macOS 14+ required for AttributedString markdown parsing.
+// All text is selectable. macOS 14+ required.
 
 import SwiftUI
 
@@ -28,19 +26,13 @@ struct MarkdownRenderer: View {
     @ViewBuilder
     private var contentView: some View {
         if text.contains("```") {
-            // Hybrid rendering: code blocks separate, inline markdown for rest
             hybridContent
-        } else if text.contains(">") {
-            // Has potential blockquotes — use .fullyParsed to handle them
-            attributedContent
         } else {
-            // Simple inline markdown only
             attributedContent
         }
     }
 
-    /// AttributedString-based rendering with full markdown parsing.
-    /// Handles blockquotes, lists, headers, links, and inline formatting.
+    /// AttributedString-based rendering with inline markdown parsing.
     @ViewBuilder
     private var attributedContent: some View {
         if let attributed = try? AttributedString(
@@ -51,6 +43,8 @@ struct MarkdownRenderer: View {
         ) {
             Text(attributed)
                 .font(.hkBody)
+                .lineSpacing(LineSpacing.body)
+                .foregroundStyle(Color.hkInk)
         } else {
             fallbackText
         }
@@ -64,8 +58,8 @@ struct MarkdownRenderer: View {
         VStack(alignment: .leading, spacing: Space.sm) {
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 switch segment {
-                case .code(let code):
-                    codeBlockView(code)
+                case .code(let language, let body):
+                    CodeBlockView(language: language, code: body)
                 case .markdown(let md):
                     if let attributed = try? AttributedString(
                         markdown: md,
@@ -75,9 +69,12 @@ struct MarkdownRenderer: View {
                     ) {
                         Text(attributed)
                             .font(.hkBody)
+                            .lineSpacing(LineSpacing.body)
+                            .foregroundStyle(Color.hkInk)
                     } else {
                         Text(md)
                             .font(.hkBody)
+                            .lineSpacing(LineSpacing.body)
                             .foregroundStyle(Color.hkInk)
                     }
                 }
@@ -89,40 +86,25 @@ struct MarkdownRenderer: View {
     private var fallbackText: some View {
         Text(text)
             .font(.hkBody)
+            .lineSpacing(LineSpacing.body)
             .foregroundStyle(Color.hkInk)
-    }
-
-    // MARK: - Code Block
-
-    /// Renders a fenced code block with monospaced font and surface background.
-    private func codeBlockView(_ code: String) -> some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            Text(code)
-                .font(.hkCodeBody)
-                .foregroundStyle(Color.hkInk)
-                .padding(Space.sm)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(Color.hkSurface2)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     // MARK: - Fenced Code Block Parser
 
     /// A parsed segment of markdown content.
     private enum Segment {
-        /// A code block (content between ``` fences).
-        case code(String)
+        /// A code block with an optional language identifier.
+        case code(language: String?, body: String)
         /// Regular markdown content.
         case markdown(String)
     }
 
     /// Splits the input on ``` fences and returns interleaved segments.
     ///
-    /// Odd-indexed segments (after splitting) are code blocks; even-indexed
-    /// are regular markdown. The opening info string after the first ```
-    /// (e.g. ```swift) is preserved as part of the code block content for
-    /// context, but not rendered as a label.
+    /// Odd-indexed parts (after splitting) are code blocks; even-indexed
+    /// are regular markdown. The info string after the opening fence
+    /// (e.g. ```swift) is extracted as the language label.
     private func parseFencedCodeBlocks(_ input: String) -> [Segment] {
         let delimiter = "```"
         var segments: [Segment] = []
@@ -130,21 +112,22 @@ struct MarkdownRenderer: View {
         let parts = input.components(separatedBy: delimiter)
 
         for (index, part) in parts.enumerated() {
-            let trimmed = part.trimmingCharacters(in: .newlines)
-            guard !trimmed.isEmpty else { continue }
-
             if index.isMultiple(of: 2) {
-                // Even index → regular markdown
+                let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
                 segments.append(.markdown(trimmed))
             } else {
-                // Odd index → code block
-                // Strip the optional language identifier on the first line
-                var code = trimmed
+                var language: String? = nil
+                var code = part
                 if let firstNewline = code.firstIndex(of: "\n") {
-                    // Remove the info string (e.g. "swift") before the newline
+                    let info = String(code[..<firstNewline])
+                        .trimmingCharacters(in: .whitespaces)
+                    if !info.isEmpty { language = info }
                     code = String(code[code.index(after: firstNewline)...])
                 }
-                segments.append(.code(code.trimmingCharacters(in: .newlines)))
+                let body = code.trimmingCharacters(in: .newlines)
+                guard !body.isEmpty else { continue }
+                segments.append(.code(language: language, body: body))
             }
         }
 
@@ -169,24 +152,11 @@ struct MarkdownRenderer: View {
         struct ContentView: View {
             var body: some View {
                 Text("Hello, World!")
-                    .foregroundStyle(.blue)
             }
         }
         ```
 
         And that's all there is to it!
-        """)
-        .padding()
-        .background(Color.hkPage)
-        .frame(width: 400)
-}
-
-#Preview("Blockquote") {
-    MarkdownRenderer(text: """
-        > **Note:** This is an important warning.
-        > Make sure to handle edge cases.
-
-        Regular text continues here.
         """)
         .padding()
         .background(Color.hkPage)
@@ -203,8 +173,6 @@ struct MarkdownRenderer: View {
         def hello():
             print("world")
         ```
-
-        > Be careful with this.
 
         - List item 1
         - List item 2

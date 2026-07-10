@@ -1,60 +1,26 @@
 // MARK: - DesignSystem Colors
 //
-// Hallmark dark-theme oklch tokens → SwiftUI Color.
-// Conversion: oklch → oklab → linear sRGB → sRGB (gamma).
+// Hallmark dark-theme tokens → SwiftUI Color.
 //
-// All values computed at compile-time via `#colorLiteral`‑safe math,
-// no runtime conversions needed.
+// All values are literal sRGB hex from docs/UI-SPEC.md §2.
+// The previous oklch→sRGB conversion contained a math bug (missing LMS
+// cube + second matrix), which rendered every neutral ~3× lighter than
+// intended. Do NOT reintroduce runtime color math — literal hex only.
+//
+// RULE: components NEVER hardcode colors. Only these tokens.
 
 import SwiftUI
 
-// MARK: - Oklch → sRGB Conversion
+// MARK: - Hex Initializer
 
-/// Performs a full oklch → oklab → linear sRGB → sRGB gamma conversion
-/// and returns an sRGB `Color` whose components are clamped to [0, 1].
-///
-/// The math follows the Oklab specification by Björn Ottosson (2020),
-/// adapted for Swift 6 with explicit type annotations and no mutable
-/// globals.
-@usableFromInline
-func oklchToColor(
-    lightness l: Double,
-    chroma c: Double,
-    hue h: Double
-) -> Color {
-    // 1. Oklch → Oklab
-    let hueRadians = h * .pi / 180.0
-    let a = c * cos(hueRadians)
-    let b = c * sin(hueRadians)
-
-    // 2. Oklab → linear sRGB (3×3 matrix from the Oklab specification)
-    let lr =  1.0 * l + 0.3963377774 * a + 0.2158037573 * b
-    let lg =  1.0 * l - 0.1055613458 * a - 0.0638541728 * b
-    let lb =  1.0 * l - 0.0894841775 * a - 1.2914855480 * b
-
-    // 3. Linear sRGB → sRGB (sRGB gamma encoding)
-    let gamma: (Double) -> Double = { linear in
-        if linear <= 0.0031308 {
-            return 12.92 * linear
-        } else {
-            return 1.055 * pow(linear, 1.0 / 2.4) - 0.055
-        }
-    }
-
-    let r = gamma(lr).clamped(to: 0...1)
-    let g = gamma(lg).clamped(to: 0...1)
-    let b_ = gamma(lb).clamped(to: 0...1)
-
-    return Color(red: r, green: g, blue: b_, opacity: 1.0)
-}
-
-// MARK: - Double Clamping Helper
-
-extension Double {
-    /// Returns the value clamped to the given closed range.
-    @usableFromInline
-    func clamped(to range: ClosedRange<Double>) -> Double {
-        return Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
+extension Color {
+    /// Creates an sRGB color from a 24-bit hex value,
+    /// e.g. `Color(hk: 0x171717)`.
+    init(hk hex: UInt32, opacity: Double = 1.0) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8) & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: opacity)
     }
 }
 
@@ -64,42 +30,65 @@ public extension Color {
 
     // MARK: - Backgrounds (Obsidian-inspired, crystalline dark)
 
-    /// Page background — deep void (oklch 10%, #171717-equivalent).
-    static let hkPage     = oklchToColor(lightness: 0.10, chroma: 0.003, hue: 270)
-    /// Panel / sidebar background (oklch 15%, #1e1e1e-equivalent).
-    static let hkPanel    = oklchToColor(lightness: 0.15, chroma: 0.005, hue: 270)
-    /// Card / surface background (oklch 20%).
-    static let hkSurface  = oklchToColor(lightness: 0.20, chroma: 0.005, hue: 270)
-    /// Elevated surface (oklch 25%).
-    static let hkSurface2 = oklchToColor(lightness: 0.25, chroma: 0.006, hue: 270)
+    /// Page background — deep void.
+    static let hkPage     = Color(hk: 0x171717)
+    /// Sidebar background.
+    static let hkPanel    = Color(hk: 0x1A1A1A)
+    /// Card / surface background (user message, input, status cards).
+    static let hkSurface  = Color(hk: 0x1E1E1E)
+    /// Elevated surface (disabled send button, hover surfaces).
+    static let hkSurface2 = Color(hk: 0x262626)
+    /// Code block background — darker than the page.
+    static let hkCodeBg   = Color(hk: 0x121212)
 
     // MARK: - Borders & Dividers
 
-    /// Subtle border / graphite (oklch 28%).
-    static let hkBorder   = oklchToColor(lightness: 0.28, chroma: 0.005, hue: 270)
-    /// Visible divider (oklch 34%).
-    static let hkRule     = oklchToColor(lightness: 0.34, chroma: 0.006, hue: 270)
+    /// Subtle border.
+    static let hkBorder   = Color(hk: 0x2E2E2E)
+    /// Visible divider / graphite.
+    static let hkRule     = Color(hk: 0x3F3F3F)
 
     // MARK: - Text (Obsidian stepping)
 
-    /// Tertiary text (oklch 55%).
-    static let hkNeutral  = oklchToColor(lightness: 0.55, chroma: 0.004, hue: 270)
-    /// Secondary / body (oklch 72%, #bcbcbc-equivalent).
-    static let hkMuted    = oklchToColor(lightness: 0.72, chroma: 0.004, hue: 270)
-    /// Primary text — bright but not pure (oklch 93%, #eeeeee-equivalent).
-    static let hkInk      = oklchToColor(lightness: 0.93, chroma: 0.003, hue: 270)
+    /// Tertiary text — timestamps, placeholders, metadata.
+    static let hkNeutral  = Color(hk: 0xA3A3A3)
+    /// Secondary text — body in code blocks, inactive labels.
+    static let hkMuted    = Color(hk: 0xBCBCBC)
+    /// Primary text — bright but not pure white.
+    static let hkInk      = Color(hk: 0xEEEEEE)
 
-    // MARK: - Accent (Obsidian amethyst #7c3aed)
+    // MARK: - Accent (Rust — Ржавчик's signature)
+    //
+    // Two-tone accent pair, mirroring Obsidian's Amethyst/Lavender logic:
+    //   hkAccent  — dark rust, for FILLS (send button, selection bar)
+    //   hkAccent2 — light rust, for TEXT (links, active labels, hovers)
+    // Dark rust is too dim to be readable as small text on hkPage —
+    // always use hkAccent2 for accent-colored text.
 
-    /// Primary accent — electric violet.
-    static let hkAccent   = oklchToColor(lightness: 0.48, chroma: 0.24, hue: 295)
-    /// Hover / highlight.
-    static let hkAccent2  = oklchToColor(lightness: 0.62, chroma: 0.18, hue: 290)
-    /// Dim accent (15% opacity).
-    static let hkAccentDim = oklchToColor(lightness: 0.48, chroma: 0.24, hue: 295).opacity(0.15)
+    /// Primary accent — rust. Fills only (buttons, selection bar).
+    static let hkAccent   = Color(hk: 0xB7410E)
+    /// Light rust — links, active-state text, hovers, code keywords.
+    static let hkAccent2  = Color(hk: 0xD97E52)
+    /// Dim accent — selection / badge backgrounds (rust at 16%).
+    static let hkAccentDim = Color(hk: 0xB7410E, opacity: 0.16)
+
+    // MARK: - Semantic
+
+    /// Success — online dots, completed subagents.
+    static let hkSuccess  = Color(hk: 0x4ADE80)
+    /// Warning — text only, never as a fill (too close to rust).
+    static let hkWarning  = Color(hk: 0xFACC15)
+    /// Error.
+    static let hkError    = Color(hk: 0xF87171)
 
     // MARK: - Effects
+    //
+    // Elevation via internal luminescence, never drop shadows.
 
     /// Inset glow on dark surfaces (1px white at 5% opacity).
     static let hkGlow = Color.white.opacity(0.05)
+    /// Stronger inset glow — input field, focused elements (white at 8%).
+    static let hkGlowStrong = Color.white.opacity(0.08)
+    /// Hover wash for ghost icon buttons (white at 4%).
+    static let hkHover = Color.white.opacity(0.04)
 }

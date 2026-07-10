@@ -2,6 +2,15 @@ import SwiftUI
 import SwiftData
 
 // MARK: - SidebarView
+//
+// Custom dark sidebar (docs/UI-SPEC.md §9). Rendered inside a plain
+// HStack (not NavigationSplitView) so macOS system materials never
+// override the hkPanel background.
+//
+// The project list is a ScrollView + buttons, NOT a List: the native
+// macOS List draws its own full-width selection highlight on top of
+// listRowBackground, which is impossible to disable cleanly. Do not
+// convert this back to List.
 
 struct SidebarView: View {
 
@@ -16,46 +25,78 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Clearance for the floating traffic-light window controls
+            // (the window uses .hiddenTitleBar).
+            Color.clear.frame(height: 36)
+
             // Header
             HStack {
                 Text("Projects")
                     .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.8)
                     .foregroundStyle(Color.hkNeutral)
                     .textCase(.uppercase)
                 Spacer()
                 Button(action: { viewModel.isCreatingProject = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.hkMuted)
+                        .foregroundStyle(Color.hkNeutral)
+                        .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.plain)
+                .help("New project")
             }
             .padding(.horizontal, Space.md)
-            .padding(.top, Space.md)
             .padding(.bottom, Space.sm)
 
-            Divider()
-                .overlay(Color.hkBorder)
-
-            // Project list
-            List(selection: $viewModel.selectedProject) {
-                ForEach(projects) { project in
-                    ProjectRow(project: project)
-                        .tag(project)
-                        .listRowBackground(
-                            viewModel.selectedProject == project
-                                ? Color.hkAccentDim
-                                : Color.clear
+            // Project list — custom selection, no system List highlight.
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(projects) { project in
+                        Button {
+                            viewModel.selectedProject = project
+                        } label: {
+                            ProjectRow(
+                                project: project,
+                                isSelected: viewModel.selectedProject == project
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(viewModel.selectedProject == project
+                                      ? Color.hkAccentDim
+                                      : Color.clear)
                         )
                         .contextMenu {
                             contextMenuActions(for: project)
                         }
+                    }
                 }
+                .padding(.horizontal, Space.sm)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
+
+            // Agent status footer.
+            // TODO: bind the dot color and label to the agent identity and
+            // a real Hermes API health check (next stage — UI-SPEC.md §10).
+            HStack(spacing: Space.sm) {
+                Circle()
+                    .fill(Color.hkSuccess)
+                    .frame(width: 7, height: 7)
+                Text("Ржавчик")
+                    .font(.hkCaption)
+                    .foregroundStyle(Color.hkNeutral)
+                Spacer()
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.sm + 2)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 1)
+            }
         }
-        .frame(minWidth: 220)
         .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingProject) {
             CreateProjectSheet(viewModel: viewModel, modelContext: modelContext)
@@ -84,7 +125,7 @@ struct SidebarView: View {
 #Preview {
     SidebarView(onSelectProject: { _ in })
         .modelContainer(previewContainer)
-        .frame(width: 240, height: 400)
+        .frame(width: 220, height: 400)
 }
 
 @MainActor

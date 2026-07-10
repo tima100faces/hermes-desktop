@@ -12,8 +12,9 @@ import SwiftData
 /// ## Scenes
 /// - **WindowGroup**: Shows `OnboardingView` when the user has no API
 ///   credentials, or `ContentView` (sidebar + chat) when configured.
-/// - **Settings**: A standard macOS Settings window with connection
-///   configuration, git sync, and about info.
+///   The window uses `.hiddenTitleBar` so the dark UI extends edge to
+///   edge; the sidebar reserves clearance for the traffic lights.
+/// - **Settings**: A standard macOS Settings window.
 ///
 /// ## SwiftData
 /// A shared `ModelContainer` for `Project` and `Message` is injected
@@ -39,8 +40,9 @@ struct HermesDesktopApp: App {
                 .modelContainer(modelContainer)
                 .task { await appState.initialize() }
                 .frame(minWidth: 860, idealWidth: 1024, minHeight: 560, idealHeight: 680)
+                .preferredColorScheme(.dark)
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1024, height: 680)
         .commands {
@@ -53,6 +55,7 @@ struct HermesDesktopApp: App {
                 gitSyncService: appState.gitSyncService
             )
             .modelContainer(modelContainer)
+            .preferredColorScheme(.dark)
         }
     }
 
@@ -74,8 +77,11 @@ struct HermesDesktopApp: App {
 
 // MARK: - ContentView
 
-/// The main application split view — sidebar projects on the left,
-/// selected project's chat on the right.
+/// The main application layout — a custom HStack split (sidebar +
+/// chat). A plain HStack is used instead of NavigationSplitView on
+/// purpose: the system split view applies macOS sidebar materials
+/// that override the design-system hkPanel background
+/// (docs/UI-SPEC.md §8).
 private struct ContentView: View {
 
     // MARK: State
@@ -88,18 +94,29 @@ private struct ContentView: View {
     // MARK: Body
 
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
             SidebarView(onSelectProject: { project in
                 selectedProject = project
             })
-        } detail: {
-            if let project = selectedProject, let runsAPI = appState.runsAPI {
-                ChatView(project: project, runsAPI: runsAPI)
-            } else {
-                emptyDetail
+            .frame(width: 220)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(width: 1)
+                .ignoresSafeArea()
+
+            Group {
+                if let project = selectedProject, let runsAPI = appState.runsAPI {
+                    ChatView(project: project, runsAPI: runsAPI)
+                        .id(project.persistentModelID)
+                } else {
+                    emptyDetail
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
+        .background(Color.hkPage)
+        .ignoresSafeArea()
     }
 
     // MARK: Empty Detail

@@ -8,80 +8,120 @@ struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @Environment(\.modelContext) private var modelContext
 
+    private let project: Project
+
     init(project: Project, runsAPI: RunsAPIProtocol) {
+        self.project = project
         _viewModel = State(initialValue: ChatViewModel(runsAPI: runsAPI, project: project))
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Space.sm) {
-                    if viewModel.messages.isEmpty && !viewModel.isStreaming {
-                        emptyStateContent
-                    } else {
-                        ForEach(viewModel.messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
+        VStack(spacing: 0) {
+            header
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: Space.md) {
+                        if viewModel.messages.isEmpty && !viewModel.isStreaming {
+                            emptyStateContent
+                        } else {
+                            ForEach(viewModel.messages) { message in
+                                MessageBubble(message: message)
+                                    .id(message.id)
+                            }
                         }
-                    }
 
-                    if viewModel.isStreaming && !viewModel.streamingContent.isEmpty {
-                        HStack {
-                            StreamingText(
-                                text: viewModel.streamingContent,
-                                isActive: viewModel.isStreaming
-                            )
-                            .padding(.horizontal, Space.lg)
-                            .padding(.vertical, Space.sm)
-                            .background(Color.hkSurface)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.hkGlow, lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            Spacer(minLength: 60)
-                        }
-                        .padding(.horizontal, Space.sm)
-                        .id("streaming")
-                    }
-
-                    ForEach(viewModel.agentStatuses) { status in
-                        AgentStatusRow(status: status)
-                    }
-
-                    if let error = viewModel.errorMessage {
-                        Text(error)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red)
+                        // Streaming assistant content — flat, no bubble,
+                        // matching the final assistant message style.
+                        if viewModel.isStreaming && !viewModel.streamingContent.isEmpty {
+                            HStack(alignment: .top, spacing: Space.sm) {
+                                StreamingText(
+                                    text: viewModel.streamingContent,
+                                    isActive: viewModel.isStreaming
+                                )
+                                .frame(maxWidth: 580, alignment: .leading)
+                                Spacer(minLength: 60)
+                            }
                             .padding(.horizontal, Space.md)
+                            .id("streaming")
+                        }
+
+                        ForEach(viewModel.agentStatuses) { status in
+                            AgentStatusRow(status: status)
+                        }
+
+                        if let error = viewModel.errorMessage {
+                            Text(error)
+                                .font(.hkCaption)
+                                .foregroundStyle(Color.hkError)
+                                .textSelection(.enabled)
+                                .padding(.horizontal, Space.md)
+                        }
+                    }
+                    .padding(.vertical, Space.md)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: viewModel.streamingContent) { _, _ in
+                    proxy.scrollTo("streaming", anchor: .bottom)
+                }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    if let last = viewModel.messages.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
-                .padding(.vertical, Space.sm)
             }
-            .background(Color.hkPage)
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: viewModel.streamingContent) { _, _ in
-                proxy.scrollTo("streaming", anchor: .bottom)
-            }
-            .onChange(of: viewModel.messages.count) { _, _ in
-                if let last = viewModel.messages.last {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                InputBar(
-                    text: $viewModel.inputText,
-                    isStreaming: viewModel.isStreaming,
-                    onSend: { sendMessage() },
-                    onStop: { stopStreaming() }
-                )
-            }
+
+            InputBar(
+                text: $viewModel.inputText,
+                isStreaming: viewModel.isStreaming,
+                onSend: { sendMessage() },
+                onStop: { stopStreaming() }
+            )
         }
         .background(Color.hkPage)
         .onAppear {
             viewModel.loadMessages(context: modelContext)
         }
     }
+
+    // MARK: - Header
+
+    /// Project title bar with a live subagent badge.
+    private var header: some View {
+        HStack {
+            Text(project.name)
+                .font(.hkBody.weight(.medium))
+                .foregroundStyle(Color.hkInk)
+                .lineLimit(1)
+
+            Spacer()
+
+            if runningAgentCount > 0 {
+                Text("\(runningAgentCount) subagent\(runningAgentCount == 1 ? "" : "s")")
+                    .font(.hkCaption)
+                    .foregroundStyle(Color.hkAccent2)
+                    .padding(.horizontal, Space.sm + 2)
+                    .padding(.vertical, 2)
+                    .background(Color.hkAccentDim)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, Space.md)
+        .padding(.top, Space.md)
+        .padding(.bottom, Space.sm + 2)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+        }
+    }
+
+    private var runningAgentCount: Int {
+        viewModel.agentStatuses.filter { $0.state == .running }.count
+    }
+
+    // MARK: - Empty State
 
     private var emptyStateContent: some View {
         VStack(spacing: Space.md) {
@@ -91,11 +131,11 @@ struct ChatView: View {
                 .foregroundStyle(Color.hkNeutral)
                 .frame(maxWidth: .infinity)
             Text("Start a conversation")
-                .font(.system(size: 14, weight: .medium))
+                .font(.hkBody.weight(.medium))
                 .foregroundStyle(Color.hkMuted)
                 .frame(maxWidth: .infinity)
             Text("Type a message below to begin chatting with Hermes.")
-                .font(.system(size: 13))
+                .font(.hkBody)
                 .foregroundStyle(Color.hkNeutral)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -115,6 +155,11 @@ struct ChatView: View {
 }
 
 // MARK: - InputBar
+//
+// Single Surface card containing a growing text field (1–8 lines) and
+// the send/stop button (docs/UI-SPEC.md §6).
+//   Enter        → send
+//   Shift+Enter  → newline
 
 struct InputBar: View {
 
@@ -125,81 +170,129 @@ struct InputBar: View {
 
     @FocusState private var isFocused: Bool
 
+    private var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Color.hkBorder).frame(height: 1)
-
-            HStack(alignment: .bottom, spacing: Space.sm) {
-                TextField("Message", text: $text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.hkInk)
-                    .padding(.horizontal, Space.md)
-                    .padding(.vertical, Space.sm)
-                    .background(Color.hkSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.hkBorder, lineWidth: 1)
-                    )
-                    .focused($isFocused)
-                    .onSubmit { onSend() }
-                    .lineLimit(1...5)
-
-                if isStreaming {
-                    Button(action: onStop) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.hkAccent)
-                            .frame(width: 32, height: 32)
+        HStack(alignment: .bottom, spacing: Space.sm) {
+            TextField("Message", text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.hkBody)
+                .lineSpacing(LineSpacing.body)
+                .foregroundStyle(Color.hkInk)
+                .lineLimit(1...8)
+                .focused($isFocused)
+                .onKeyPress(.return, phases: .down) { press in
+                    if press.modifiers.contains(.shift) {
+                        // Shift+Enter → newline. Appends at the end of the
+                        // text; cursor-position-aware insertion is a known
+                        // limitation (see UI-SPEC.md §6).
+                        text += "\n"
+                        return .handled
                     }
-                    .buttonStyle(.plain)
-                    .background(Color.hkAccentDim)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    Button(action: onSend) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        text.trimmingCharacters(in: .whitespaces).isEmpty
-                            ? Color.hkSurface2 : Color.hkAccent
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                    guard !isStreaming, !isEmpty else { return .handled }
+                    onSend()
+                    return .handled
                 }
+                .padding(.vertical, 6)
+
+            if isStreaming {
+                controlButton(
+                    icon: "stop.fill",
+                    background: Color.hkAccentDim,
+                    foreground: Color.hkAccent2,
+                    action: onStop
+                )
+                .help("Stop")
+            } else {
+                controlButton(
+                    icon: "arrow.up",
+                    background: isEmpty ? Color.hkSurface2 : Color.hkAccent,
+                    foreground: .white,
+                    action: onSend
+                )
+                .disabled(isEmpty)
+                .help("Send")
             }
-            .padding(.horizontal, Space.md)
-            .padding(.vertical, Space.sm)
         }
-        .background(Color.hkPanel)
+        .padding(.horizontal, Space.md)
+        .padding(.vertical, Space.sm)
+        .background(Color.hkSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.hkGlowStrong, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, Space.md)
+        .padding(.top, Space.xs)
+        .padding(.bottom, Space.md)
+        .background(Color.hkPage)
         .onAppear { isFocused = true }
+    }
+
+    private func controlButton(
+        icon: String,
+        background: Color,
+        foreground: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(foreground)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(background)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
 // MARK: - AgentStatusRow
+//
+// Subagent status rendered as a Surface card in the chat flow
+// (docs/UI-SPEC.md §7).
 
 struct AgentStatusRow: View {
     let status: AgentStatus
 
     var body: some View {
-        HStack(spacing: Space.xs) {
-            Circle()
-                .fill(status.state == .running ? Color.hkAccent : Color.hkMuted)
-                .frame(width: 8, height: 8)
-            Text(status.name)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.hkMuted)
-            if let progress = status.progress {
-                Text(progress)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.hkMuted)
-                    .lineLimit(1)
+        HStack(alignment: .top, spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                if status.state == .running {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.hkAccent2)
+                } else {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.hkSuccess)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.name)
+                        .font(.hkBody.weight(.medium))
+                        .foregroundStyle(Color.hkInk)
+                        .lineLimit(1)
+                    if let progress = status.progress, !progress.isEmpty {
+                        Text(progress)
+                            .font(.hkCaption)
+                            .foregroundStyle(Color.hkNeutral)
+                            .lineLimit(1)
+                    }
+                }
             }
-            Spacer()
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.sm + 2)
+            .background(Color.hkSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.hkGlow, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Spacer(minLength: 60)
         }
         .padding(.horizontal, Space.md)
     }
