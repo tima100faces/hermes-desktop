@@ -118,17 +118,13 @@ public actor SSEClient {
             // Accumulates lines that belong to the current (incomplete) event block.
             var currentEventLines: [String] = []
 
-            var lineCount = 0
             for try await line in bytes.lines {
                 guard !Task.isCancelled else { break }
-                lineCount += 1
-                if lineCount <= 10 { print("📡 [SSE] Line \(lineCount): '\(line.prefix(100))'") }
 
                 if line.isEmpty {
                     guard !currentEventLines.isEmpty else { continue }
 
                     let eventBlock = currentEventLines.joined(separator: "\n")
-                    print("📦 [SSE] Event block: \(eventBlock.prefix(200))")
                     currentEventLines.removeAll(keepingCapacity: true)
 
                     processEventBlock(eventBlock, decoder: decoder, continuation: continuation)

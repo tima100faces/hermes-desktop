@@ -137,16 +137,12 @@ final class ChatViewModel {
         let conversation = project.conversationKey
 
         do {
-            print("🔵 [HermesDesktop] Creating run: input=\"\(text.prefix(50))...\" conversation=\(conversation)")
             let response = try await runsAPI.createRun(input: text, conversation: conversation)
             currentRunId = response.runId
-            print("🟢 [HermesDesktop] Run created: \(response.runId), status=\(response.status)")
 
             let stream = await runsAPI.streamEvents(runId: response.runId)
-            print("🟡 [HermesDesktop] Streaming started for run \(response.runId)")
 
             for await event in stream {
-                print("📥 [HermesDesktop] Event: type=\(event.type), content=\(event.content?.prefix(30) ?? "nil")")
                 switch event.type {
                 case .textDelta:
                     if let content = event.content {
@@ -220,7 +216,6 @@ final class ChatViewModel {
             currentRunId = nil
 
         } catch {
-            print("🔴 [HermesDesktop] Error: \(error)")
             errorMessage = error.localizedDescription
             streamingContent = ""
             isStreaming = false

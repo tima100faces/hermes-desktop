@@ -94,7 +94,6 @@ public actor HermesAPIClient {
             ? baseURL.absoluteString + endpoint.path.dropFirst()
             : baseURL.absoluteString + endpoint.path
         let url = URL(string: urlString)!
-        print("🌐 [HermesDesktop] Request: \(endpoint.method) \(url.absoluteString)")
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = endpoint.method
