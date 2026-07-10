@@ -272,9 +272,13 @@ public actor SSEClient {
             }
         }()
 
+        // Map API fields: "message.delta" uses "delta", "run.completed" uses "output",
+        // "reasoning.available" uses "text". Unify into RunEvent.content.
+        let unifiedContent = payload?.delta ?? payload?.output ?? payload?.text ?? payload?.content
+
         return RunEvent(
             type: eventType,
-            content: payload?.content,
+            content: unifiedContent,
             toolName: payload?.toolName,
             toolInput: payload?.toolInput,
             toolOutput: payload?.toolOutput,
@@ -293,6 +297,9 @@ public actor SSEClient {
 /// but no `content`.
 private struct RunEventPayload: Decodable, Sendable {
     let content: String?
+    let delta: String?
+    let output: String?
+    let text: String?
     let toolName: String?
     let toolInput: String?
     let toolOutput: String?
@@ -300,6 +307,9 @@ private struct RunEventPayload: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case content
+        case delta
+        case output
+        case text
         case toolName = "tool_name"
         case toolInput = "tool_input"
         case toolOutput = "tool_output"

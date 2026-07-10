@@ -4,16 +4,18 @@ import Foundation
 
 /// Types of SSE events emitted by the Hermes Runs API.
 public enum RunEventType: String, Codable, Sendable {
-    /// A text delta (token) in the streaming response.
-    case textDelta = "text_delta"
-    /// The agent called a tool.
-    case toolCall = "tool_call"
-    /// The tool returned a result.
-    case toolResult = "tool_result"
-    /// The run completed successfully.
-    case runCompleted = "run_completed"
-    /// The run failed with an error.
-    case runFailed = "run_failed"
+    /// A text delta (token) in the streaming response. API: "message.delta"
+    case textDelta = "message.delta"
+    /// The agent called a tool. API: "tool.call"
+    case toolCall = "tool.call"
+    /// The tool returned a result. API: "tool.result"
+    case toolResult = "tool.result"
+    /// The run completed successfully. API: "run.completed"
+    case runCompleted = "run.completed"
+    /// The run failed with an error. API: "run.failed"
+    case runFailed = "run.failed"
+    /// Reasoning / thinking chunk. API: "reasoning.available"
+    case reasoningAvailable = "reasoning.available"
 }
 
 // MARK: - RunEvent
