@@ -32,8 +32,9 @@ final class ChatViewModel {
     /// `true` while an agent run is actively streaming tokens.
     var isStreaming: Bool = false
 
-    /// In-progress assistant content, updated on every `text_delta` event.
-    /// The view displays this as a streaming bubble.
+    /// In-progress assistant content, throttled to `streamingPublishInterval`
+    /// (see `pendingStreamingContent`). The view displays this as a
+    /// streaming bubble.
     var streamingContent: String = ""
 
     /// Status badges for subagents shown during a run.
@@ -46,6 +47,31 @@ final class ChatViewModel {
 
     /// The chat this view model is driving, behind a shared interface.
     private let conversationService: ConversationService
+
+    // MARK: - Streaming Throttle
+    //
+    // A fast model can emit a `text_delta` every few milliseconds. Publishing
+    // `streamingContent` on every single one made SwiftUI re-parse the whole
+    // accumulated Markdown text and re-scroll the message list hundreds of
+    // times a second — the render pipeline fell so far behind that the
+    // "streaming" bubble never visibly grew and the text appeared to pop in
+    // all at once at the end. `pendingStreamingContent` accumulates every
+    // delta immediately (a cheap string append); `streamingContent` — what
+    // the view actually observes — is a copy of it refreshed at most once
+    // per `streamingPublishInterval`. `run.completed`/`run.failed` always
+    // read `pendingStreamingContent` directly, so the final chunk is never
+    // lost or delayed behind a throttle tick that hasn't fired yet.
+
+    /// Full accumulated streaming text — updated synchronously on every
+    /// `.textDelta`, never throttled.
+    private var pendingStreamingContent: String = ""
+
+    /// `ContinuousClock` timestamp of the last time `pendingStreamingContent`
+    /// was copied into the observed `streamingContent`.
+    private var lastStreamingPublish: ContinuousClock.Instant?
+
+    /// Minimum gap between `streamingContent` updates while a run is active.
+    private let streamingPublishInterval: Duration = .milliseconds(70)
 
     // MARK: - Initialization
 
@@ -81,10 +107,10 @@ final class ChatViewModel {
     /// ## Event Handling
     /// | Event | Action |
     /// |---|---|
-    /// | `.textDelta` | Append `content` to `streamingContent` |
+    /// | `.textDelta` | Append `content` to `pendingStreamingContent`, publish to `streamingContent` if due |
     /// | `.toolCall` | Create an `AgentStatus(.running)` and append to `agentStatuses` |
     /// | `.toolResult` | Update matching `AgentStatus` to `.completed` with output |
-    /// | `.runCompleted` | Persist `streamingContent` as an assistant message, clear state |
+    /// | `.runCompleted` | Persist `pendingStreamingContent` as an assistant message, clear state |
     /// | `.runFailed` | Set `errorMessage`, clear streaming state |
     ///
     /// - Parameter context: The SwiftData `ModelContext` for persistence.
@@ -97,6 +123,7 @@ final class ChatViewModel {
             await conversationService.stop()
             savePartialContent(context: context)
             streamingContent = ""
+            pendingStreamingContent = ""
             agentStatuses = []
             isStreaming = false
         }
@@ -116,6 +143,8 @@ final class ChatViewModel {
         // --- Initialise streaming state ---
         isStreaming = true
         streamingContent = ""
+        pendingStreamingContent = ""
+        lastStreamingPublish = nil
         errorMessage = nil
         agentStatuses = []
 
@@ -126,7 +155,8 @@ final class ChatViewModel {
                 switch event.type {
                 case .textDelta:
                     if let content = event.content {
-                        streamingContent += content
+                        pendingStreamingContent += content
+                        publishStreamingContentIfDue()
                     }
 
                 case .toolCall:
@@ -145,11 +175,14 @@ final class ChatViewModel {
                     }
 
                 case .runCompleted:
-                    // Use streamingContent (built from deltas), or fall back to
-                    // event.content (output field) if no incremental deltas arrived.
-                    let finalContent = streamingContent.isEmpty
+                    // Read pendingStreamingContent directly (not the possibly
+                    // throttled streamingContent) so the final chunk is never
+                    // lost or delayed behind a publish tick that hasn't fired
+                    // yet. Falls back to event.content (output field) if no
+                    // incremental deltas arrived at all.
+                    let finalContent = pendingStreamingContent.isEmpty
                         ? (event.content ?? "")
-                        : streamingContent
+                        : pendingStreamingContent
                     let assistantMsg = Message(
                         content: finalContent,
                         role: .assistant,
@@ -158,12 +191,14 @@ final class ChatViewModel {
                     conversationService.persist(assistantMsg, context: context)
                     messages.append(assistantMsg)
                     streamingContent = ""
+                    pendingStreamingContent = ""
                     isStreaming = false
                     return
 
                 case .runFailed:
                     errorMessage = event.error ?? "Run failed"
                     streamingContent = ""
+                    pendingStreamingContent = ""
                     isStreaming = false
                     return
 
@@ -175,9 +210,9 @@ final class ChatViewModel {
 
             // Stream ended without a terminal event (e.g. server closed connection).
             // Save whatever we have as a partial message.
-            if !streamingContent.isEmpty {
+            if !pendingStreamingContent.isEmpty {
                 let partialMsg = Message(
-                    content: streamingContent,
+                    content: pendingStreamingContent,
                     role: .assistant,
                     runId: conversationService.currentTurnId
                 )
@@ -186,13 +221,28 @@ final class ChatViewModel {
             }
 
             streamingContent = ""
+            pendingStreamingContent = ""
             isStreaming = false
 
         } catch {
             errorMessage = error.localizedDescription
             streamingContent = ""
+            pendingStreamingContent = ""
             isStreaming = false
         }
+    }
+
+    /// Copies `pendingStreamingContent` into the observed `streamingContent`
+    /// if `streamingPublishInterval` has elapsed since the last publish —
+    /// throttles how often the view re-renders/re-parses Markdown and
+    /// re-scrolls during a fast stream.
+    private func publishStreamingContentIfDue() {
+        let now = ContinuousClock.now
+        if let last = lastStreamingPublish, now - last < streamingPublishInterval {
+            return
+        }
+        lastStreamingPublish = now
+        streamingContent = pendingStreamingContent
     }
 
     // MARK: - Stop Streaming
@@ -213,16 +263,19 @@ final class ChatViewModel {
         savePartialContent(context: context)
 
         streamingContent = ""
+        pendingStreamingContent = ""
         agentStatuses = []
         isStreaming = false
     }
 
     // MARK: - Helpers
 
-    /// Persists the current `streamingContent` as a partial assistant message.
+    /// Persists the current `pendingStreamingContent` as a partial assistant
+    /// message — reads the un-throttled accumulator so a stop mid-stream
+    /// never drops a chunk still waiting behind a publish tick.
     private func savePartialContent(context: ModelContext) {
-        guard !streamingContent.isEmpty else { return }
-        let partialMsg = Message(content: streamingContent, role: .assistant)
+        guard !pendingStreamingContent.isEmpty else { return }
+        let partialMsg = Message(content: pendingStreamingContent, role: .assistant)
         conversationService.persist(partialMsg, context: context)
         messages.append(partialMsg)
     }

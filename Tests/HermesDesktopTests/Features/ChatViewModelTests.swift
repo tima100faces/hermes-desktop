@@ -197,17 +197,45 @@ final class ChatViewModelTests: XCTestCase {
 
         try? await Task.sleep(nanoseconds: 50_000_000)
 
+        // Sent well within one streamingContent publish interval of each
+        // other — the throttle (see ChatViewModel.streamingPublishInterval)
+        // means the visible streamingContent isn't guaranteed to reflect
+        // every one of these before the run completes. What must hold is
+        // the guarantee that matters: nothing is lost by completion.
         await mockRunsAPI.sendEvent(RunEvent(type: .textDelta, content: "Swift"))
         try? await Task.sleep(nanoseconds: 10_000_000)
         await mockRunsAPI.sendEvent(RunEvent(type: .textDelta, content: " is"))
         try? await Task.sleep(nanoseconds: 10_000_000)
         await mockRunsAPI.sendEvent(RunEvent(type: .textDelta, content: " awesome"))
         try? await Task.sleep(nanoseconds: 10_000_000)
+        await mockRunsAPI.sendEvent(RunEvent(type: .runCompleted))
+        await mockRunsAPI.finishStream()
+        await sendTask.value
 
-        // Assert — streaming content accumulated correctly
-        XCTAssertEqual(viewModel.streamingContent, "Swift is awesome")
+        // Assert — all three deltas accumulated correctly in the final message
+        XCTAssertEqual(viewModel.messages.last?.content, "Swift is awesome")
+    }
+
+    func testFirstTextDeltaPublishesImmediately() async throws {
+        // Arrange — the very first delta of a turn must publish right away
+        // (no artificial startup delay), even though later ones this close
+        // together are throttled.
+        viewModel.inputText = "Explain Swift"
+
+        let sendTask = Task {
+            await viewModel.sendMessage(context: modelContext)
+        }
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        await mockRunsAPI.sendEvent(RunEvent(type: .textDelta, content: "Swift"))
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        // Assert
+        XCTAssertEqual(viewModel.streamingContent, "Swift")
 
         // Clean up
+        await mockRunsAPI.sendEvent(RunEvent(type: .runCompleted))
         await mockRunsAPI.finishStream()
         await sendTask.value
     }
