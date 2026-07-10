@@ -32,6 +32,15 @@ final class SidebarViewModel {
     /// The project pending confirmation before deletion.
     private var pendingDeletion: Project?
 
+    /// Whether the "Rename Project" sheet is presented.
+    var isRenamingProject = false
+
+    /// Text binding for the rename text field.
+    var renameProjectName = ""
+
+    /// The project pending a rename.
+    private var pendingRename: Project?
+
     // MARK: - Intent(s)
 
     /// Create a new project from the current `newProjectName`.
@@ -89,6 +98,41 @@ final class SidebarViewModel {
     func cancelDelete() {
         pendingDeletion = nil
         showDeleteConfirmation = false
+    }
+
+    /// Request a rename — shows the rename sheet pre-filled with the
+    /// project's current name.
+    ///
+    /// - Parameter project: The project to rename.
+    func requestRename(_ project: Project) {
+        pendingRename = project
+        renameProjectName = project.name
+        errorMessage = nil
+        isRenamingProject = true
+    }
+
+    /// Confirm and apply the pending rename.
+    ///
+    /// - Parameter context: The SwiftData `ModelContext` to save into.
+    func confirmRename(context: ModelContext) {
+        let trimmed = renameProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Project name cannot be empty"
+            return
+        }
+        pendingRename?.name = trimmed
+        try? context.save()
+
+        renameProjectName = ""
+        pendingRename = nil
+        isRenamingProject = false
+    }
+
+    /// Cancel the pending rename.
+    func cancelRename() {
+        pendingRename = nil
+        renameProjectName = ""
+        isRenamingProject = false
     }
 
     /// Dismiss the current error.

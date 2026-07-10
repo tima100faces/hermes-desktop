@@ -43,3 +43,35 @@ struct ProjectRow: View {
         return formatter.localizedString(for: project.lastActiveAt, relativeTo: Date())
     }
 }
+
+// MARK: - ProjectMenuButton
+
+/// "…" trigger for a project row, revealed on hover — opens a menu with
+/// Rename / Delete. Same 26×26 ghost style as `IconActionButton`, but
+/// placed as a sibling of the row's selection button (not nested inside
+/// its label) so the menu remains clickable.
+struct ProjectMenuButton: View {
+    let onRename: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Menu {
+            Button("Rename") { onRename() }
+            Button("Delete", role: .destructive) { onDelete() }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.hkNeutral)
+                .frame(width: 26, height: 26)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 26, height: 26)
+        .background(isHovering ? Color.hkHover : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { isHovering = $0 }
+        .help("Project actions")
+    }
+}

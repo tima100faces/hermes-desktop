@@ -22,6 +22,9 @@ struct SidebarView: View {
 
     @State private var viewModel = SidebarViewModel()
 
+    /// The project currently under the pointer — reveals its "…" menu.
+    @State private var hoveredProject: Project?
+
     /// Agent display name — editable in Settings → General.
     @AppStorage("agent_name") private var agentName: String = "Ржавчик"
 
@@ -60,21 +63,36 @@ struct SidebarView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(projects) { project in
-                        Button {
-                            viewModel.selectedProject = project
-                        } label: {
-                            ProjectRow(
-                                project: project,
-                                isSelected: viewModel.selectedProject == project
-                            )
+                        HStack(spacing: 0) {
+                            Button {
+                                viewModel.selectedProject = project
+                            } label: {
+                                ProjectRow(
+                                    project: project,
+                                    isSelected: viewModel.selectedProject == project
+                                )
+                            }
+                            .buttonStyle(.plain)
+
+                            // Sibling of the selection Button (not nested in
+                            // its label) so the menu stays clickable.
+                            if hoveredProject == project {
+                                ProjectMenuButton(
+                                    onRename: { viewModel.requestRename(project) },
+                                    onDelete: { viewModel.requestDelete(project) }
+                                )
+                                .padding(.trailing, Space.xs)
+                            }
                         }
-                        .buttonStyle(.plain)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(viewModel.selectedProject == project
                                       ? Color.hkAccentDim
                                       : Color.clear)
                         )
+                        .onHover { hovering in
+                            hoveredProject = hovering ? project : (hoveredProject == project ? nil : hoveredProject)
+                        }
                         .contextMenu {
                             contextMenuActions(for: project)
                         }
@@ -107,6 +125,9 @@ struct SidebarView: View {
         .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingProject) {
             CreateProjectSheet(viewModel: viewModel, modelContext: modelContext)
+        }
+        .sheet(isPresented: $viewModel.isRenamingProject) {
+            RenameProjectSheet(viewModel: viewModel, modelContext: modelContext)
         }
         .alert("Delete Project?", isPresented: $viewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
@@ -147,6 +168,9 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func contextMenuActions(for project: Project) -> some View {
+        Button("Rename") {
+            viewModel.requestRename(project)
+        }
         Button("Delete", role: .destructive) {
             viewModel.requestDelete(project)
         }
