@@ -10,6 +10,7 @@ struct CreateProjectSheet: View {
 
     @Bindable var viewModel: SidebarViewModel
     let modelContext: ModelContext
+    @Binding var selectedProject: Project?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -71,7 +72,7 @@ struct CreateProjectSheet: View {
     // MARK: - Actions
 
     private func createAndDismiss() {
-        viewModel.createProject(context: modelContext)
+        viewModel.createProject(context: modelContext, selectedProject: &selectedProject)
         if viewModel.errorMessage == nil {
             dismiss()
         }
@@ -90,6 +91,7 @@ struct CreateProjectSheet: View {
 
     CreateProjectSheet(
         viewModel: SidebarViewModel(),
-        modelContext: context
+        modelContext: context,
+        selectedProject: .constant(nil)
     )
 }

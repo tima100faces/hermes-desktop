@@ -18,7 +18,11 @@ struct SidebarView: View {
     /// and the unconfigured state work without one.
     var connectionMonitor: ConnectionMonitor?
 
-    let onSelectProject: (Project) -> Void
+    /// The app's single source of truth for which project is active —
+    /// shared with ContentView so the sidebar highlight stays in sync
+    /// regardless of how the project changed (sidebar click, Cmd+K
+    /// palette, etc).
+    @Binding var selectedProject: Project?
 
     @State private var viewModel = SidebarViewModel()
 
@@ -65,11 +69,11 @@ struct SidebarView: View {
                     ForEach(projects) { project in
                         HStack(spacing: 0) {
                             Button {
-                                viewModel.selectedProject = project
+                                selectedProject = project
                             } label: {
                                 ProjectRow(
                                     project: project,
-                                    isSelected: viewModel.selectedProject == project
+                                    isSelected: selectedProject == project
                                 )
                             }
                             .buttonStyle(.plain)
@@ -86,7 +90,7 @@ struct SidebarView: View {
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(viewModel.selectedProject == project
+                                .fill(selectedProject == project
                                       ? Color.hkAccentDim
                                       : Color.clear)
                         )
@@ -124,26 +128,25 @@ struct SidebarView: View {
         }
         .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingProject) {
-            CreateProjectSheet(viewModel: viewModel, modelContext: modelContext)
+            CreateProjectSheet(viewModel: viewModel, modelContext: modelContext, selectedProject: $selectedProject)
         }
         .sheet(isPresented: $viewModel.isRenamingProject) {
             RenameProjectSheet(viewModel: viewModel, modelContext: modelContext)
         }
         .alert("Delete Project?", isPresented: $viewModel.showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
-            Button("Delete", role: .destructive) { viewModel.confirmDelete(context: modelContext) }
+            Button("Delete", role: .destructive) {
+                viewModel.confirmDelete(context: modelContext, selectedProject: &selectedProject)
+            }
         } message: {
             Text("This will permanently delete the project and all its messages.")
-        }
-        .onChange(of: viewModel.selectedProject) { _, project in
-            if let project { onSelectProject(project) }
         }
         .onAppear {
             // Auto-open the most recent project on launch, so the app
             // starts in a chat instead of the empty placeholder
             // (docs/UI-SPEC.md §9).
-            if viewModel.selectedProject == nil, let mostRecent = projects.first {
-                viewModel.selectedProject = mostRecent
+            if selectedProject == nil, let mostRecent = projects.first {
+                selectedProject = mostRecent
             }
         }
     }
@@ -180,7 +183,7 @@ struct SidebarView: View {
 // MARK: - Preview
 
 #Preview {
-    SidebarView(onSelectProject: { _ in })
+    SidebarView(selectedProject: .constant(nil))
         .modelContainer(previewContainer)
         .frame(width: 220, height: 400)
 }

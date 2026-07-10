@@ -91,35 +91,60 @@ private struct ContentView: View {
     /// The project the user has selected in the sidebar.
     @State private var selectedProject: Project?
 
+    /// Whether the Cmd+K quick-switcher overlay is shown.
+    @State private var isPaletteShown = false
+
+    @Query(sort: \Project.lastActiveAt, order: .reverse)
+    private var projects: [Project]
+
     // MARK: Body
 
     var body: some View {
-        HStack(spacing: 0) {
-            SidebarView(
-                connectionMonitor: appState.connectionMonitor,
-                onSelectProject: { project in
-                    selectedProject = project
-                }
-            )
-            .frame(width: 220)
+        ZStack {
+            HStack(spacing: 0) {
+                SidebarView(
+                    connectionMonitor: appState.connectionMonitor,
+                    selectedProject: $selectedProject
+                )
+                .frame(width: 220)
 
-            Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(width: 1)
-                .ignoresSafeArea()
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 1)
+                    .ignoresSafeArea()
 
-            Group {
-                if let project = selectedProject, let runsAPI = appState.runsAPI {
-                    ChatView(project: project, runsAPI: runsAPI)
-                        .id(project.persistentModelID)
-                } else {
-                    emptyDetail
+                Group {
+                    if let project = selectedProject, let runsAPI = appState.runsAPI {
+                        ChatView(project: project, runsAPI: runsAPI)
+                            .id(project.persistentModelID)
+                    } else {
+                        emptyDetail
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.hkPage)
+            .ignoresSafeArea()
+
+            if isPaletteShown {
+                ProjectPaletteView(
+                    projects: projects,
+                    onSelect: { project in
+                        selectedProject = project
+                        isPaletteShown = false
+                    },
+                    onDismiss: { isPaletteShown = false }
+                )
+            }
         }
-        .background(Color.hkPage)
-        .ignoresSafeArea()
+        .background {
+            // Hidden trigger — Cmd+K opens the palette from anywhere in
+            // the window, regardless of what currently has focus.
+            Button("") { isPaletteShown = true }
+                .keyboardShortcut("k", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+        }
     }
 
     // MARK: Empty Detail

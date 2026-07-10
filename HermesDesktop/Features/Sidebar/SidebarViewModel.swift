@@ -14,9 +14,6 @@ final class SidebarViewModel {
 
     // MARK: Published State
 
-    /// The currently selected project in the sidebar list.
-    var selectedProject: Project?
-
     /// Whether the "Create Project" sheet is presented.
     var isCreatingProject = false
 
@@ -43,10 +40,13 @@ final class SidebarViewModel {
 
     // MARK: - Intent(s)
 
-    /// Create a new project from the current `newProjectName`.
+    /// Create a new project from the current `newProjectName` and select it.
     ///
-    /// - Parameter context: The SwiftData `ModelContext` to insert into.
-    func createProject(context: ModelContext) {
+    /// - Parameters:
+    ///   - context: The SwiftData `ModelContext` to insert into.
+    ///   - selectedProject: The app's active-project state — set to the
+    ///     newly created project on success.
+    func createProject(context: ModelContext, selectedProject: inout Project?) {
         let trimmed = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             errorMessage = "Project name cannot be empty"
@@ -82,8 +82,11 @@ final class SidebarViewModel {
 
     /// Confirm and execute the pending deletion.
     ///
-    /// - Parameter context: The SwiftData `ModelContext` to delete from.
-    func confirmDelete(context: ModelContext) {
+    /// - Parameters:
+    ///   - context: The SwiftData `ModelContext` to delete from.
+    ///   - selectedProject: The app's active-project state — cleared if it
+    ///     pointed at the deleted project.
+    func confirmDelete(context: ModelContext, selectedProject: inout Project?) {
         guard let project = pendingDeletion else { return }
         context.delete(project)
         try? context.save()
