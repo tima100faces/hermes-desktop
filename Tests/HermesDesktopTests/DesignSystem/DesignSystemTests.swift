@@ -9,7 +9,7 @@ final class DesignSystemTests: XCTestCase {
     // MARK: - Oklch → Color
 
     func testOklchToColorProducesValidColor() {
-        let color = Color.hkPaper
+        let color = Color.hkPage
         // The color should not be a clear/empty color — extract components
         // to verify it resolved to something.
         let resolved = color.resolve(in: .init())
@@ -19,27 +19,28 @@ final class DesignSystemTests: XCTestCase {
     }
 
     func testAccentColor() {
-        let paper = Color.hkPaper
+        let page = Color.hkPage
         let accent = Color.hkAccent
 
-        let resolvedPaper = paper.resolve(in: .init())
+        let resolvedPage = page.resolve(in: .init())
         let resolvedAccent = accent.resolve(in: .init())
 
-        // Accent should have noticeably different RGB values from paper
-        let rDiff = abs(resolvedAccent.red - resolvedPaper.red)
-        let gDiff = abs(resolvedAccent.green - resolvedPaper.green)
-        let bDiff = abs(resolvedAccent.blue - resolvedPaper.blue)
+        // Accent should have noticeably different RGB values from the page
+        // background.
+        let rDiff = abs(resolvedAccent.red - resolvedPage.red)
+        let gDiff = abs(resolvedAccent.green - resolvedPage.green)
+        let bDiff = abs(resolvedAccent.blue - resolvedPage.blue)
         let totalDiff = rDiff + gDiff + bDiff
 
-        // hkAccent (oklch 58% 0.22 285) should be a visible purple,
-        // distinctly different from hkPaper (oklch 12% 0.008 270).
+        // hkAccent (0xB7410E, rust) should be clearly distinguishable from
+        // hkPage (0x171717, near-black).
         XCTAssertGreaterThan(totalDiff, 0.3)
     }
 
     func testAllColorsDefined() {
         let colors: [Color] = [
-            .hkPaper,
-            .hkPaper2,
+            .hkPage,
+            .hkPanel,
             .hkSurface,
             .hkSurface2,
             .hkRule,
