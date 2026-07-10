@@ -64,14 +64,14 @@ public extension Color {
 
     // MARK: - Backgrounds (Linear-inspired depth stepping)
 
-    /// Page background — near-black canvas (oklch 9%).
-    static let hkPage     = oklchToColor(lightness: 0.09, chroma: 0.004, hue: 270)
-    /// Panel / sidebar background (oklch 18%).
-    static let hkPanel    = oklchToColor(lightness: 0.18, chroma: 0.006, hue: 270)
-    /// Card / surface background (oklch 22%).
-    static let hkSurface  = oklchToColor(lightness: 0.22, chroma: 0.008, hue: 270)
-    /// Elevated surface (oklch 26%).
-    static let hkSurface2 = oklchToColor(lightness: 0.26, chroma: 0.010, hue: 270)
+    /// Page background — deep near-black (oklch 7%).
+    static let hkPage     = oklchToColor(lightness: 0.07, chroma: 0.003, hue: 270)
+    /// Panel / sidebar background (oklch 13%).
+    static let hkPanel    = oklchToColor(lightness: 0.13, chroma: 0.005, hue: 270)
+    /// Card / surface background (oklch 18%).
+    static let hkSurface  = oklchToColor(lightness: 0.18, chroma: 0.006, hue: 270)
+    /// Elevated surface (oklch 22%).
+    static let hkSurface2 = oklchToColor(lightness: 0.22, chroma: 0.008, hue: 270)
 
     // MARK: - Borders & Dividers (semi-transparent, Linear-style)
 

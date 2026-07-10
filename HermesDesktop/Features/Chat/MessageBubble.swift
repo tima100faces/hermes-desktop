@@ -9,7 +9,7 @@ struct MessageBubble: View {
     private var isTool: Bool { message.role == Message.Role.tool.rawValue }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: Space.sm) {
+        HStack(alignment: .top, spacing: Space.sm) {
             if isUser { Spacer(minLength: 60) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: Space.xs) {
@@ -19,20 +19,19 @@ struct MessageBubble: View {
                         .foregroundStyle(Color.hkNeutral)
                         .italic()
                         .frame(maxWidth: .infinity, alignment: .center)
+                } else if isUser {
+                    Text(message.content)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Space.lg)
+                        .padding(.vertical, Space.sm)
+                        .background(Color.hkAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
                 } else {
                     Text(message.content)
                         .font(.system(size: 13))
-                        .foregroundStyle(isUser ? .white : Color.hkInk)
-                        .padding(.horizontal, Space.lg)
-                        .padding(.vertical, Space.sm)
-                        .background(isUser ? Color.hkAccent : Color.hkSurface)
-                        .overlay {
-                            if !isUser {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.hkBorder, lineWidth: 1)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .foregroundStyle(Color.hkInk)
+                        .padding(.vertical, Space.xs)
                 }
 
                 Text(message.timestamp, style: .time)
