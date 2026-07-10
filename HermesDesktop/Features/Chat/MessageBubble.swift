@@ -31,7 +31,14 @@ struct MessageBubble: View {
                     Text(message.content)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.hkInk)
-                        .padding(.vertical, Space.xs)
+                        .padding(.horizontal, Space.lg)
+                        .padding(.vertical, Space.sm)
+                        .background(Color.hkSurface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.hkGlow, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 Text(message.timestamp, style: .time)

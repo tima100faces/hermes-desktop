@@ -31,7 +31,14 @@ struct ChatView: View {
                                 text: viewModel.streamingContent,
                                 isActive: viewModel.isStreaming
                             )
-                            .padding(.vertical, Space.xs)
+                            .padding(.horizontal, Space.lg)
+                            .padding(.vertical, Space.sm)
+                            .background(Color.hkSurface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.hkGlow, lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                             Spacer(minLength: 60)
                         }
                         .padding(.horizontal, Space.sm)
