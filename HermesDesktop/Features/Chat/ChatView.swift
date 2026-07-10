@@ -1,8 +1,3 @@
-// MARK: - ChatView
-//
-// Primary chat screen — message list with streaming, input bar,
-// agent status indicators, and auto-scroll.
-
 import SwiftUI
 import SwiftData
 
@@ -39,7 +34,11 @@ struct ChatView: View {
                             .padding(.horizontal, Space.lg)
                             .padding(.vertical, Space.sm)
                             .background(Color.hkSurface2)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.hkBorder, lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
                             Spacer(minLength: 60)
                         }
                         .padding(.horizontal, Space.sm)
@@ -52,14 +51,14 @@ struct ChatView: View {
 
                     if let error = viewModel.errorMessage {
                         Text(error)
-                            .font(.hkCaption)
+                            .font(.system(size: 12))
                             .foregroundStyle(.red)
                             .padding(.horizontal, Space.md)
                     }
                 }
                 .padding(.vertical, Space.sm)
             }
-            .background(Color.hkPaper)
+            .background(Color.hkPage)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.streamingContent) { _, _ in
                 proxy.scrollTo("streaming", anchor: .bottom)
@@ -67,11 +66,6 @@ struct ChatView: View {
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let last = viewModel.messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
-                }
-            }
-            .onChange(of: viewModel.agentStatuses.count) { _, _ in
-                if let lastStatus = viewModel.agentStatuses.last {
-                    proxy.scrollTo(lastStatus.id, anchor: .bottom)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -83,13 +77,11 @@ struct ChatView: View {
                 )
             }
         }
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .onAppear {
             viewModel.loadMessages(context: modelContext)
         }
     }
-
-    // MARK: - Empty State
 
     private var emptyStateContent: some View {
         VStack(spacing: Space.md) {
@@ -99,11 +91,11 @@ struct ChatView: View {
                 .foregroundStyle(Color.hkNeutral)
                 .frame(maxWidth: .infinity)
             Text("Start a conversation")
-                .font(.hkTitle)
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Color.hkMuted)
                 .frame(maxWidth: .infinity)
             Text("Type a message below to begin chatting with Hermes.")
-                .font(.hkBody)
+                .font(.system(size: 13))
                 .foregroundStyle(Color.hkNeutral)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -112,12 +104,8 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, minHeight: 300)
     }
 
-    // MARK: - Actions
-
     private func sendMessage() {
-        guard !viewModel.inputText.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ).isEmpty else { return }
+        guard !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         Task { await viewModel.sendMessage(context: modelContext) }
     }
 
@@ -138,49 +126,56 @@ struct InputBar: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: Space.sm) {
-            TextField("Message", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.hkBody)
-                .foregroundStyle(Color.hkInk)
-                .padding(.horizontal, Space.md)
-                .padding(.vertical, Space.sm)
-                .background(Color.hkSurface2)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .focused($isFocused)
-                .onSubmit { onSend() }
-                .lineLimit(1...5)
-                .submitLabel(.send)
+        VStack(spacing: 0) {
+            Rectangle().fill(Color.hkBorder).frame(height: 1)
 
-            if isStreaming {
-                Button(action: onStop) {
-                    Image(systemName: "stop.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color.hkAccent)
+            HStack(alignment: .bottom, spacing: Space.sm) {
+                TextField("Message", text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.hkInk)
+                    .padding(.horizontal, Space.md)
+                    .padding(.vertical, Space.sm)
+                    .background(Color.hkSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.hkBorder, lineWidth: 1)
+                    )
+                    .focused($isFocused)
+                    .onSubmit { onSend() }
+                    .lineLimit(1...5)
+
+                if isStreaming {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.hkAccent)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Color.hkAccentDim)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Button(action: onSend) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        text.trimmingCharacters(in: .whitespaces).isEmpty
+                            ? Color.hkSurface2 : Color.hkAccent
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .buttonStyle(.plain)
-            } else {
-                Button(action: onSend) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(
-                            text.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? Color.hkNeutral
-                                : Color.hkAccent
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.sm)
         }
-        .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm)
-        .background(Color.hkPaper2)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.hkRule)
-                .frame(height: 1)
-        }
+        .background(Color.hkPanel)
         .onAppear { isFocused = true }
     }
 }
@@ -188,7 +183,6 @@ struct InputBar: View {
 // MARK: - AgentStatusRow
 
 struct AgentStatusRow: View {
-
     let status: AgentStatus
 
     var body: some View {
@@ -197,11 +191,11 @@ struct AgentStatusRow: View {
                 .fill(status.state == .running ? Color.hkAccent : Color.hkMuted)
                 .frame(width: 8, height: 8)
             Text(status.name)
-                .font(.hkCaption)
+                .font(.system(size: 12))
                 .foregroundStyle(Color.hkMuted)
             if let progress = status.progress {
                 Text(progress)
-                    .font(.hkCaption)
+                    .font(.system(size: 12))
                     .foregroundStyle(Color.hkMuted)
                     .lineLimit(1)
             }
@@ -209,10 +203,4 @@ struct AgentStatusRow: View {
         }
         .padding(.horizontal, Space.md)
     }
-}
-
-#Preview("Chat View") {
-    Text("ChatView — open in app with a configured project to test")
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
 }

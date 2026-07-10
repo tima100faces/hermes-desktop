@@ -44,7 +44,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 400)
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .task { await viewModel.load() }
     }
 

@@ -55,7 +55,7 @@ struct StreamingText: View {
         isActive: true
     )
     .padding()
-    .background(Color.hkPaper)
+    .background(Color.hkPage)
     .frame(width: 400)
 }
 
@@ -65,7 +65,7 @@ struct StreamingText: View {
         isActive: false
     )
     .padding()
-    .background(Color.hkPaper)
+    .background(Color.hkPage)
     .frame(width: 400)
 }
 
@@ -88,6 +88,6 @@ struct StreamingText: View {
         )
     }
     .padding()
-    .background(Color.hkPaper)
+    .background(Color.hkPage)
     .frame(width: 400, height: 300)
 }

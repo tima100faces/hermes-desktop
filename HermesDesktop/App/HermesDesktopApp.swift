@@ -115,6 +115,6 @@ private struct ContentView: View {
                 .foregroundStyle(Color.hkMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
     }
 }

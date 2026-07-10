@@ -79,7 +79,7 @@ struct OnboardingView: View {
         }
         .padding(Space.xxl)
         .frame(minWidth: 480, minHeight: 400)
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .onChange(of: viewModel.isConnected) { _, connected in
             if connected { onConnected() }
         }

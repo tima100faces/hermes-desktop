@@ -157,7 +157,7 @@ struct MarkdownRenderer: View {
 #Preview("Simple Markdown") {
     MarkdownRenderer(text: "This is **bold**, *italic*, and `inline code`.")
         .padding()
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .frame(width: 400)
 }
 
@@ -177,7 +177,7 @@ struct MarkdownRenderer: View {
         And that's all there is to it!
         """)
         .padding()
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .frame(width: 400)
 }
 
@@ -189,7 +189,7 @@ struct MarkdownRenderer: View {
         Regular text continues here.
         """)
         .padding()
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .frame(width: 400)
 }
 
@@ -210,6 +210,6 @@ struct MarkdownRenderer: View {
         - List item 2
         """)
         .padding()
-        .background(Color.hkPaper)
+        .background(Color.hkPage)
         .frame(width: 400)
 }

@@ -65,7 +65,7 @@ struct CreateProjectSheet: View {
         }
         .padding(Space.lg)
         .frame(width: 320)
-        .background(Color.hkPaper2)
+        .background(Color.hkPanel)
     }
 
     // MARK: - Actions

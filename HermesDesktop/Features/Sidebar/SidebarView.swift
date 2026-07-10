@@ -3,116 +3,73 @@ import SwiftData
 
 // MARK: - SidebarView
 
-/// The primary sidebar of Hermes Desktop.
-///
-/// Displays a list of `Project` objects sorted by most-recently-active,
-/// with create / delete capabilities and a selection callback.
 struct SidebarView: View {
 
-    // MARK: Dependencies
-
-    /// Callback invoked whenever the selection changes.
     let onSelectProject: (Project) -> Void
-
-    // MARK: State
 
     @State private var viewModel = SidebarViewModel()
 
-    /// Sorted project list — most recently active first.
-    @Query(
-        sort: \Project.lastActiveAt,
-        order: .reverse
-    )
+    @Query(sort: \Project.lastActiveAt, order: .reverse)
     private var projects: [Project]
 
     @Environment(\.modelContext) private var modelContext
 
-    // MARK: Body
-
     var body: some View {
-        List(selection: $viewModel.selectedProject) {
-            Section("Projects") {
-                if projects.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(projects) { project in
-                        ProjectRow(project: project)
-                            .tag(project)
-                            .listRowBackground(
-                                viewModel.selectedProject == project
-                                    ? Color.hkAccent.opacity(0.15)
-                                    : Color.clear
-                            )
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Projects")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.hkNeutral)
+                    .textCase(.uppercase)
+                Spacer()
+                Button(action: { viewModel.isCreatingProject = true }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.hkMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.top, Space.md)
+            .padding(.bottom, Space.sm)
+
+            Divider()
+                .overlay(Color.hkBorder)
+
+            // Project list
+            List(selection: $viewModel.selectedProject) {
+                ForEach(projects) { project in
+                    ProjectRow(project: project)
+                        .tag(project)
+                        .listRowBackground(
+                            viewModel.selectedProject == project
+                                ? Color.hkAccentDim
+                                : Color.clear
+                        )
                         .contextMenu {
-                                contextMenuActions(for: project)
-                            }
-                    }
+                            contextMenuActions(for: project)
+                        }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(Color.hkPaper)
-        .navigationTitle("Hermes")
-        .toolbarBackground(Color.hkPaper, for: .windowToolbar)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    viewModel.isCreatingProject = true
-                } label: {
-                    Label("New Project", systemImage: "plus")
-                }
-            }
-        }
+        .frame(minWidth: 220)
+        .background(Color.hkPanel)
         .sheet(isPresented: $viewModel.isCreatingProject) {
-            CreateProjectSheet(
-                viewModel: viewModel,
-                modelContext: modelContext
-            )
+            CreateProjectSheet(viewModel: viewModel, modelContext: modelContext)
         }
-        .alert(
-            "Delete Project?",
-            isPresented: $viewModel.showDeleteConfirmation
-        ) {
-            Button("Cancel", role: .cancel) {
-                viewModel.cancelDelete()
-            }
-            Button("Delete", role: .destructive) {
-                viewModel.confirmDelete(context: modelContext)
-            }
+        .alert("Delete Project?", isPresented: $viewModel.showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { viewModel.cancelDelete() }
+            Button("Delete", role: .destructive) { viewModel.confirmDelete(context: modelContext) }
         } message: {
-            Text("This will permanently delete the project and all its messages. This action cannot be undone.")
+            Text("This will permanently delete the project and all its messages.")
         }
         .onChange(of: viewModel.selectedProject) { _, project in
-            if let project {
-                onSelectProject(project)
-            }
+            if let project { onSelectProject(project) }
         }
     }
-
-    // MARK: - Empty State
-
-    @ViewBuilder
-    private var emptyState: some View {
-        VStack(spacing: Space.sm) {
-            Image(systemName: "square.stack.3d.up.slash")
-                .font(.hkTitle)
-                .foregroundColor(.hkNeutral)
-
-            Text("No projects yet")
-                .font(.hkBody)
-                .foregroundColor(.hkNeutral)
-
-            Text("Tap + to create your first project")
-                .font(.hkCaption)
-                .foregroundColor(.hkMuted)
-        }
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-    }
-
-    // MARK: - Context Menu
 
     @ViewBuilder
     private func contextMenuActions(for project: Project) -> some View {
@@ -124,7 +81,11 @@ struct SidebarView: View {
 
 // MARK: - Preview
 
-// MARK: - Preview Helpers
+#Preview {
+    SidebarView(onSelectProject: { _ in })
+        .modelContainer(previewContainer)
+        .frame(width: 240, height: 400)
+}
 
 @MainActor
 private let previewContainer: ModelContainer = {
@@ -135,9 +96,3 @@ private let previewContainer: ModelContainer = {
     try? container.mainContext.save()
     return container
 }()
-
-#Preview {
-    SidebarView(onSelectProject: { _ in })
-        .modelContainer(previewContainer)
-        .frame(width: 240, height: 400)
-}

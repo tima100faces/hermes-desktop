@@ -62,38 +62,39 @@ extension Double {
 
 public extension Color {
 
-    // MARK: - Backgrounds
+    // MARK: - Backgrounds (Linear-inspired depth stepping)
 
-    /// Darkest background (oklch 12% 0.008 270).
-    static let hkPaper   = oklchToColor(lightness: 0.12, chroma: 0.008, hue: 270)
-    /// Alt background (oklch 14% 0.010 270).
-    static let hkPaper2  = oklchToColor(lightness: 0.14, chroma: 0.010, hue: 270)
+    /// Page background — near-black canvas (oklch 8%).
+    static let hkPage     = oklchToColor(lightness: 0.08, chroma: 0.004, hue: 270)
+    /// Panel / sidebar background (oklch 11%).
+    static let hkPanel    = oklchToColor(lightness: 0.11, chroma: 0.006, hue: 270)
+    /// Card / surface background (oklch 16%).
+    static let hkSurface  = oklchToColor(lightness: 0.16, chroma: 0.008, hue: 270)
+    /// Elevated surface (oklch 20%).
+    static let hkSurface2 = oklchToColor(lightness: 0.20, chroma: 0.010, hue: 270)
 
-    // MARK: - Surfaces
+    // MARK: - Borders & Dividers (semi-transparent, Linear-style)
 
-    /// Card / surface background (oklch 18% 0.012 270).
-    static let hkSurface  = oklchToColor(lightness: 0.18, chroma: 0.012, hue: 270)
-    /// Elevated surface (oklch 22% 0.014 270).
-    static let hkSurface2 = oklchToColor(lightness: 0.22, chroma: 0.014, hue: 270)
+    /// Subtle border — semi-transparent white on dark.
+    static let hkBorder   = Color.white.opacity(0.06)
+    /// Visible border / divider.
+    static let hkRule     = Color.white.opacity(0.10)
 
-    // MARK: - Borders & Rules
+    // MARK: - Text (stepped luminance)
 
-    /// Border / divider rule (oklch 28% 0.015 270).
-    static let hkRule     = oklchToColor(lightness: 0.28, chroma: 0.015, hue: 270)
+    /// Muted / tertiary text (oklch 48%).
+    static let hkNeutral  = oklchToColor(lightness: 0.48, chroma: 0.008, hue: 270)
+    /// Secondary / body text (oklch 68%).
+    static let hkMuted    = oklchToColor(lightness: 0.68, chroma: 0.005, hue: 270)
+    /// Primary text — soft white, not pure (oklch 95%).
+    static let hkInk      = oklchToColor(lightness: 0.95, chroma: 0.003, hue: 270)
 
-    // MARK: - Text
+    // MARK: - Accent (Linear-style indigo-violet)
 
-    /// Muted / secondary text (oklch 50% 0.012 270).
-    static let hkNeutral  = oklchToColor(lightness: 0.50, chroma: 0.012, hue: 270)
-    /// Secondary text (oklch 65% 0.008 270).
-    static let hkMuted    = oklchToColor(lightness: 0.65, chroma: 0.008, hue: 270)
-    /// Primary text (oklch 93% 0.005 270).
-    static let hkInk      = oklchToColor(lightness: 0.93, chroma: 0.005, hue: 270)
-
-    // MARK: - Accents
-
-    /// Primary accent (oklch 58% 0.22 285).
-    static let hkAccent   = oklchToColor(lightness: 0.58, chroma: 0.22, hue: 285)
-    /// Hover / highlight accent (oklch 72% 0.18 285).
-    static let hkAccent2  = oklchToColor(lightness: 0.72, chroma: 0.18, hue: 285)
+    /// Primary accent (oklch 55% 0.20 285).
+    static let hkAccent   = oklchToColor(lightness: 0.55, chroma: 0.20, hue: 285)
+    /// Hover / highlight accent (oklch 65% 0.18 285).
+    static let hkAccent2  = oklchToColor(lightness: 0.65, chroma: 0.18, hue: 285)
+    /// Dim accent for subtle emphasis (same L/C, 15% opacity).
+    static let hkAccentDim = oklchToColor(lightness: 0.55, chroma: 0.20, hue: 285).opacity(0.15)
 }
