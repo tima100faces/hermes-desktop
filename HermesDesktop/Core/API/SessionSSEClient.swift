@@ -16,10 +16,9 @@ private extension Logger {
 // `RunEventType` shape the Runs API dialect uses in `SSEClient`, so
 // `ChatViewModel` never needs to know which transport produced an event.
 //
-// The low-level byte-stream framing here is intentionally a separate,
-// small duplicate of `SSEClient`'s (rather than a shared refactor) to
-// avoid any risk of regressing the already-working Runs API streaming
-// path used by pinned chats.
+// The low-level byte-stream framing (bytes → lines → SSE frames) is
+// shared with `SSEClient` via `SSEFrameParser` — this type only owns the
+// Sessions-specific event names and JSON field mapping.
 //
 // NOTE: the exact JSON field names the Sessions dialect uses for tool
 // events are inferred (reusing the Runs dialect's field names), not
@@ -116,30 +115,8 @@ public actor SessionSSEClient {
                 return
             }
 
-            var currentEventLines: [String] = []
-
-            for try await line in bytes.lines {
-                guard !Task.isCancelled else { break }
-
-                if line.isEmpty {
-                    guard !currentEventLines.isEmpty else { continue }
-
-                    let eventBlock = currentEventLines.joined(separator: "\n")
-                    currentEventLines.removeAll(keepingCapacity: true)
-
-                    processEventBlock(eventBlock, decoder: decoder, continuation: continuation)
-
-                    if Task.isCancelled {
-                        break
-                    }
-                } else {
-                    currentEventLines.append(line)
-                }
-            }
-
-            if !currentEventLines.isEmpty {
-                let eventBlock = currentEventLines.joined(separator: "\n")
-                processEventBlock(eventBlock, decoder: decoder, continuation: continuation)
+            try await SSEFrameParser.run(bytes: bytes) { frame in
+                processFrame(frame, decoder: decoder, continuation: continuation)
             }
 
         } catch is CancellationError {
@@ -151,63 +128,29 @@ public actor SessionSSEClient {
         continuation.finish()
     }
 
-    // MARK: - Process Event Block
+    // MARK: - Process Frame
 
-    private static func processEventBlock(
-        _ block: String,
+    /// Maps one `SSEFrame` to a `RunEvent` and yields it.
+    ///
+    /// - Returns: `true` if this was a terminal event (`run.completed` /
+    ///   `run.failed`) — the caller should stop reading further bytes.
+    private static func processFrame(
+        _ frame: SSEFrame,
         decoder: JSONDecoder,
         continuation: AsyncStream<RunEvent>.Continuation
-    ) {
-        guard !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-
-        guard let parsed = parseSSEEvent(block) else {
-            Logger.sessionSSE.warning("Failed to parse chat/stream event block: \(block.prefix(200))")
-            return
-        }
-
-        guard let runEvent = mapToRunEvent(parsed, decoder: decoder) else {
+    ) -> Bool {
+        guard let runEvent = mapToRunEvent(frame, decoder: decoder) else {
             Logger.sessionSSE.warning("Failed to map chat/stream event to RunEvent, skipping")
-            return
+            return false
         }
 
         continuation.yield(runEvent)
 
-        if runEvent.type == .runCompleted || runEvent.type == .runFailed {
-            continuation.finish()
+        guard runEvent.type == .runCompleted || runEvent.type == .runFailed else {
+            return false
         }
-    }
-
-    // MARK: - SSE Parsing
-
-    private typealias SSEMessage = (event: String?, data: String?)
-
-    private static func parseSSEEvent(_ block: String) -> SSEMessage? {
-        var event: String?
-        var data: String?
-
-        let lines = block.split(separator: "\n", omittingEmptySubsequences: false)
-        for line in lines {
-            guard let colonIndex = line.firstIndex(of: ":") else { continue }
-
-            let field = line[line.startIndex ..< colonIndex]
-                .trimmingCharacters(in: .whitespaces)
-            let valueStart = line.index(after: colonIndex)
-            let value = line[valueStart...]
-                .trimmingCharacters(in: .whitespaces)
-
-            switch field {
-            case "event":
-                event = value
-            case "data":
-                data = value
-            default:
-                break
-            }
-        }
-
-        return (event, data)
+        continuation.finish()
+        return true
     }
 
     // MARK: - Event Mapping (Sessions dialect)
@@ -234,13 +177,13 @@ public actor SessionSSEClient {
     }
 
     private static func mapToRunEvent(
-        _ message: SSEMessage,
+        _ frame: SSEFrame,
         decoder: JSONDecoder
     ) -> RunEvent? {
         let eventField: String
-        if let sseEvent = message.event {
+        if let sseEvent = frame.event {
             eventField = sseEvent
-        } else if let dataStr = message.data, let data = dataStr.data(using: .utf8),
+        } else if let dataStr = frame.data, let data = dataStr.data(using: .utf8),
                   let envelope = try? decoder.decode(SessionEventPayload.self, from: data),
                   let jsonEvent = envelope.event {
             eventField = jsonEvent
@@ -255,7 +198,7 @@ public actor SessionSSEClient {
         }
 
         let payload: SessionEventPayload? = {
-            guard let dataField = message.data, !dataField.isEmpty,
+            guard let dataField = frame.data, !dataField.isEmpty,
                   let data = dataField.data(using: .utf8)
             else {
                 return nil
