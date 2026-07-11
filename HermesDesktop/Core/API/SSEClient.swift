@@ -84,19 +84,11 @@ public actor SSEClient {
 
     // MARK: - Stream Runner (non-isolated)
 
-    /// Reads the SSE byte stream, parses events, and yields them to the continuation.
+    /// Reads the SSE byte stream, parses events via the shared
+    /// `SSEFrameParser`, and yields mapped `RunEvent`s to the continuation.
     ///
     /// Designed as a `static` function so it can be called from the non-isolated
     /// `Task` closure created inside `connect(...)` without crossing actor boundaries.
-    ///
-    /// Splits the raw byte stream into lines manually instead of using
-    /// `URLSession.AsyncBytes.lines` — on this platform that sequence does not
-    /// reliably yield empty lines for blank-line event delimiters, which
-    /// silently merged every event of a run into a single garbled one (only
-    /// the last `event:`/`data:` value of the whole run ever got parsed).
-    /// Event framing here follows the SSE dispatch algorithm (WHATWG HTML
-    /// §9.2.6): multiple `data:` lines accumulate (joined with `\n`, not
-    /// overwritten) and a block dispatches only on a blank line.
     private static func runStream(
         url: URL,
         token: String,
@@ -124,81 +116,8 @@ public actor SSEClient {
                 return
             }
 
-            // Per-event field accumulators (SSE dispatch algorithm).
-            var eventType: String?
-            var dataLines: [String] = []
-            var lineBytes: [UInt8] = []
-            var stopped = false
-
-            func dispatchPendingEvent() {
-                guard eventType != nil || !dataLines.isEmpty else { return }
-                let data = dataLines.isEmpty ? nil : dataLines.joined(separator: "\n")
-                let event = eventType
-                eventType = nil
-                dataLines.removeAll(keepingCapacity: true)
-                if processEvent(event: event, data: data, decoder: decoder, continuation: continuation) {
-                    stopped = true
-                }
-            }
-
-            func consume(line: String) {
-                if line.isEmpty {
-                    dispatchPendingEvent()
-                    return
-                }
-                // Comment lines start with ':' per spec — ignored (servers
-                // use these for keep-alive pings on long-running streams).
-                if line.hasPrefix(":") {
-                    return
-                }
-                guard let colonIndex = line.firstIndex(of: ":") else {
-                    return
-                }
-
-                let field = line[line.startIndex ..< colonIndex]
-                    .trimmingCharacters(in: .whitespaces)
-
-                var value = line[line.index(after: colonIndex)...]
-                // Per spec, strip at most one leading space — not full
-                // trimming, which could corrupt intentional content.
-                if value.first == " " {
-                    value = value.dropFirst()
-                }
-
-                switch field {
-                case "event":
-                    eventType = String(value)
-                case "data":
-                    dataLines.append(String(value))
-                default:
-                    break
-                }
-            }
-
-            for try await byte in bytes {
-                guard !Task.isCancelled, !stopped else { break }
-
-                if byte == 0x0A {
-                    // Strip a trailing \r so CRLF and LF line endings both work.
-                    if lineBytes.last == 0x0D {
-                        lineBytes.removeLast()
-                    }
-                    let line = String(decoding: lineBytes, as: UTF8.self)
-                    lineBytes.removeAll(keepingCapacity: true)
-                    consume(line: line)
-                    if stopped { break }
-                } else {
-                    lineBytes.append(byte)
-                }
-            }
-
-            if !stopped {
-                // Flush a trailing partial line with no terminating LF, then
-                // any event left pending by a missing final blank line.
-                if !lineBytes.isEmpty {
-                    consume(line: String(decoding: lineBytes, as: UTF8.self))
-                }
-                dispatchPendingEvent()
+            try await SSEFrameParser.run(bytes: bytes) { frame in
+                processEvent(frame: frame, decoder: decoder, continuation: continuation)
             }
 
         } catch is CancellationError {
@@ -212,18 +131,17 @@ public actor SSEClient {
 
     // MARK: - Event Mapping
 
-    /// Maps one accumulated SSE event's fields to a `RunEvent` and yields it.
+    /// Maps one `SSEFrame` to a `RunEvent` and yields it.
     ///
     /// - Returns: `true` if this was a terminal event (`run.completed` /
     ///   `run.failed`) — the caller should stop reading further bytes.
     private static func processEvent(
-        event: String?,
-        data: String?,
+        frame: SSEFrame,
         decoder: JSONDecoder,
         continuation: AsyncStream<RunEvent>.Continuation
     ) -> Bool {
-        guard let runEvent = Self.mapToRunEvent(event: event, data: data, decoder: decoder) else {
-            Logger.sse.warning("Failed to map SSE event to RunEvent, skipping (event: \(event ?? "nil"))")
+        guard let runEvent = Self.mapToRunEvent(event: frame.event, data: frame.data, decoder: decoder) else {
+            Logger.sse.warning("Failed to map SSE event to RunEvent, skipping (event: \(frame.event ?? "nil"))")
             return false
         }
 
