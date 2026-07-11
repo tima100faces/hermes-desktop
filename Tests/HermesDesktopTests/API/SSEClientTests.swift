@@ -8,11 +8,15 @@ final class MockSSEURLProtocol: URLProtocol {
 
     static var mockData: Data?
     static var mockStatusCode: Int = 200
+    /// The most recent intercepted request — lets tests assert on headers
+    /// and body, not just the response side.
+    static var capturedRequest: URLRequest?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.capturedRequest = request
         guard let data = Self.mockData else {
             client?.urlProtocolDidFinishLoading(self)
             return
@@ -38,6 +42,7 @@ final class SSEClientTests: XCTestCase {
     override func tearDown() {
         MockSSEURLProtocol.mockData = nil
         MockSSEURLProtocol.mockStatusCode = 200
+        MockSSEURLProtocol.capturedRequest = nil
     }
 
     /// Creates an `SSEClient` whose `URLSession` routes through `MockSSEURLProtocol`.

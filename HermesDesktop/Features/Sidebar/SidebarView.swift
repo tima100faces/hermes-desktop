@@ -7,11 +7,12 @@ import SwiftData
 // HStack (not NavigationSplitView) so macOS system materials never
 // override the hkPanel background.
 //
-// Two sections: "Pinned" (only shown when at least one chat is
-// pinned) above "Chats" (docs/UI-SPEC.md §9). Both lists are
-// ScrollView + buttons, NOT List: the native macOS List draws its own
-// full-width selection highlight on top of listRowBackground, which is
-// impossible to disable cleanly. Do not convert this back to List.
+// Three sections top to bottom: "Pinned" (only shown when at least one
+// chat is pinned), "Projects" (always shown, own "+"), "Chats" (always
+// shown, own "+") — docs/UI-SPEC.md §9. All lists are ScrollView +
+// buttons, NOT List: the native macOS List draws its own full-width
+// selection highlight on top of listRowBackground, which is impossible to
+// disable cleanly. Do not convert this back to List.
 
 struct SidebarView: View {
 
@@ -19,15 +20,18 @@ struct SidebarView: View {
     /// and the unconfigured state work without one.
     var connectionMonitor: ConnectionMonitor?
 
-    /// The app's single source of truth for which chat is active — shared
-    /// with ContentView so the sidebar highlight stays in sync regardless
-    /// of how the selection changed (sidebar click, Cmd+K palette, etc).
-    @Binding var selection: Chat?
+    /// The app's single source of truth for what's shown in the main pane
+    /// (a chat or a project page) — shared with ContentView so the sidebar
+    /// highlight stays in sync regardless of how the selection changed
+    /// (sidebar click, Cmd+K palette, etc).
+    @Binding var selection: SidebarSelection?
 
     @State private var chatViewModel: ChatSidebarViewModel
+    @State private var projectViewModel: ProjectSidebarViewModel
 
-    /// The chat currently under the pointer — reveals its "…" menu.
+    /// The chat / project currently under the pointer — reveals its "…" menu.
     @State private var hoveredChat: Chat?
+    @State private var hoveredProject: Project?
 
     /// Agent display name — editable in Settings → General. No hardcoded
     /// default: empty falls back to "Hermes" below.
@@ -36,24 +40,30 @@ struct SidebarView: View {
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
 
+    @Query(sort: \Project.name)
+    private var projects: [Project]
+
     @Environment(\.modelContext) private var modelContext
 
     private var pinnedChats: [Chat] {
         chats.filter(\.isPinned)
     }
 
+    /// Chats outside any project and not pinned — project chats live only
+    /// on their project's page (docs/UI-SPEC.md §9).
     private var regularChats: [Chat] {
-        chats.filter { !$0.isPinned }
+        chats.filter { !$0.isPinned && $0.project == nil }
     }
 
     init(
         connectionMonitor: ConnectionMonitor?,
-        selection: Binding<Chat?>,
+        selection: Binding<SidebarSelection?>,
         sessionsAPI: SessionsAPIProtocol
     ) {
         self.connectionMonitor = connectionMonitor
         self._selection = selection
         self._chatViewModel = State(initialValue: ChatSidebarViewModel(sessionsAPI: sessionsAPI))
+        self._projectViewModel = State(initialValue: ProjectSidebarViewModel(sessionsAPI: sessionsAPI))
     }
 
     var body: some View {
@@ -72,11 +82,21 @@ struct SidebarView: View {
                     }
 
                     sectionHeader(
+                        title: "Projects",
+                        help: "New project",
+                        action: { createProject() }
+                    )
+                    .padding(.top, pinnedChats.isEmpty ? 0 : Space.sm)
+                    ForEach(projects) { project in
+                        projectRow(project)
+                    }
+
+                    sectionHeader(
                         title: "Chats",
                         help: "New chat",
                         action: { Task { await createChat() } }
                     )
-                    .padding(.top, pinnedChats.isEmpty ? 0 : Space.sm)
+                    .padding(.top, Space.sm)
                     ForEach(regularChats) { chat in
                         chatRow(chat)
                     }
@@ -114,7 +134,7 @@ struct SidebarView: View {
             Button("Delete", role: .destructive) {
                 Task {
                     let deleted = await chatViewModel.confirmDelete(context: modelContext)
-                    if let deleted, selection == deleted {
+                    if let deleted, selection == .chat(deleted) {
                         selection = nil
                     }
                 }
@@ -122,12 +142,38 @@ struct SidebarView: View {
         } message: {
             Text("This chat will be permanently deleted.")
         }
+        .alert("Delete project?", isPresented: $projectViewModel.showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { projectViewModel.cancelDelete() }
+            Button("Delete", role: .destructive) {
+                Task {
+                    let deleted = await projectViewModel.confirmDelete(context: modelContext)
+                    if let deleted, selection == .project(deleted) {
+                        selection = nil
+                    }
+                }
+            }
+        } message: {
+            Text(projectDeleteMessage)
+        }
+        .alert(
+            "Couldn't delete project",
+            isPresented: Binding(
+                get: { projectViewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { projectViewModel.clearError() }
+                }
+            )
+        ) {
+            Button("OK") { projectViewModel.clearError() }
+        } message: {
+            Text(projectViewModel.errorMessage ?? "")
+        }
         .onAppear {
             // Auto-open the most recently active chat on launch, so the
             // app starts in a chat instead of the empty placeholder
             // (docs/UI-SPEC.md §9).
             guard selection == nil else { return }
-            selection = chats.first
+            selection = chats.first.map { .chat($0) }
         }
     }
 
@@ -161,9 +207,9 @@ struct SidebarView: View {
     private func chatRow(_ chat: Chat) -> some View {
         HStack(spacing: 0) {
             Button {
-                selection = chat
+                selection = .chat(chat)
             } label: {
-                ChatRow(chat: chat, isSelected: selection == chat)
+                ChatRow(chat: chat, isSelected: selection == .chat(chat))
             }
             .buttonStyle(.plain)
 
@@ -182,7 +228,7 @@ struct SidebarView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selection == chat ? Color.hkAccentDim : Color.clear)
+                .fill(selection == .chat(chat) ? Color.hkAccentDim : Color.clear)
         )
         .onHover { hovering in
             hoveredChat = hovering ? chat : (hoveredChat == chat ? nil : hoveredChat)
@@ -196,12 +242,54 @@ struct SidebarView: View {
         }
     }
 
+    private func projectRow(_ project: Project) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                selection = .project(project)
+            } label: {
+                ProjectRow(project: project, isSelected: selection == .project(project))
+            }
+            .buttonStyle(.plain)
+
+            if hoveredProject == project {
+                ConversationMenuButton(
+                    onDelete: { projectViewModel.requestDelete(project) },
+                    help: "Project actions"
+                )
+                .padding(.trailing, Space.xs)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selection == .project(project) ? Color.hkAccentDim : Color.clear)
+        )
+        .onHover { hovering in
+            hoveredProject = hovering ? project : (hoveredProject == project ? nil : hoveredProject)
+        }
+        .contextMenu {
+            Button("Delete", role: .destructive) { projectViewModel.requestDelete(project) }
+        }
+    }
+
     // MARK: - Actions
 
     private func createChat() async {
         if let chat = await chatViewModel.createChat(context: modelContext) {
-            selection = chat
+            selection = .chat(chat)
         }
+    }
+
+    private func createProject() {
+        let project = projectViewModel.createProject(context: modelContext)
+        selection = .project(project)
+    }
+
+    // MARK: - Delete Messaging
+
+    private var projectDeleteMessage: String {
+        let count = projectViewModel.pendingDeletionChatCount
+        let chatWord = count == 1 ? "chat" : "chats"
+        return "This will permanently delete this project and its \(count) \(chatWord)."
     }
 
     // MARK: - Status
@@ -238,7 +326,7 @@ struct SidebarView: View {
 @MainActor
 private let previewContainer: ModelContainer = {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Chat.self, configurations: config)
+    let container = try! ModelContainer(for: Chat.self, Project.self, configurations: config)
     let chat = Chat(conversationKey: "sample-topic", title: "Sample Topic", isPinned: true)
     container.mainContext.insert(chat)
     try? container.mainContext.save()
@@ -252,7 +340,7 @@ private actor PreviewSessionsAPI: SessionsAPIProtocol {
     func renameSession(id: String, title: String) async throws -> SessionInfo { SessionInfo(id: id, title: title) }
     func deleteSession(id: String) async throws {}
     func getMessages(sessionId: String) async throws -> [SessionMessage] { [] }
-    func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+    func streamChat(sessionId: String, input: String, instructions: String?, sessionKey: String?) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
         (AsyncStream { $0.finish() }, {})
     }
 }

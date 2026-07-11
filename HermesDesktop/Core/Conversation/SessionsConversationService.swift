@@ -48,8 +48,20 @@ public final class SessionsConversationService: ConversationService {
         try? context.save()
     }
 
+    /// Instructions and session key are read from `chat.project` fresh on
+    /// every call (not captured at `init`), so editing a project's
+    /// instructions mid-conversation takes effect on the very next message —
+    /// the expected behavior confirmed with the product owner.
     public func send(input: String) async throws -> AsyncStream<RunEvent> {
-        let (stream, cancel) = try await sessionsAPI.streamChat(sessionId: sessionId, input: input)
+        let trimmedInstructions = chat.project?.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        let instructions = (trimmedInstructions?.isEmpty ?? true) ? nil : trimmedInstructions
+
+        let (stream, cancel) = try await sessionsAPI.streamChat(
+            sessionId: sessionId,
+            input: input,
+            instructions: instructions,
+            sessionKey: chat.project?.sessionKey
+        )
         cancelCurrentStream = cancel
         return stream
     }

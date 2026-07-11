@@ -18,8 +18,24 @@ struct ChatView: View {
     /// Header title — the topic's or chat's display name.
     private let title: String
 
-    init(title: String, conversationService: ConversationService) {
+    /// The owning project's name, when this chat belongs to one — shown as
+    /// a small back-link above the title. `nil` for chats outside a
+    /// project.
+    private let projectName: String?
+
+    /// Returns to the project's page. Always non-`nil` when `projectName`
+    /// is non-`nil`.
+    private let onOpenProject: (() -> Void)?
+
+    init(
+        title: String,
+        conversationService: ConversationService,
+        projectName: String? = nil,
+        onOpenProject: (() -> Void)? = nil
+    ) {
         self.title = title
+        self.projectName = projectName
+        self.onOpenProject = onOpenProject
         _viewModel = State(initialValue: ChatViewModel(conversationService: conversationService))
     }
 
@@ -154,10 +170,27 @@ struct ChatView: View {
     /// Chat title bar with a live subagent badge.
     private var header: some View {
         HStack {
-            Text(title)
-                .font(.hkBody.weight(.medium))
-                .foregroundStyle(Color.hkInk)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                if let projectName {
+                    Button {
+                        onOpenProject?()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(projectName)
+                        }
+                        .font(.hkCaption)
+                        .foregroundStyle(Color.hkAccent2)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(title)
+                    .font(.hkBody.weight(.medium))
+                    .foregroundStyle(Color.hkInk)
+                    .lineLimit(1)
+            }
 
             Spacer()
 

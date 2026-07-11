@@ -44,6 +44,12 @@ public final class Chat {
     /// unpinned.
     var isPinned: Bool
 
+    /// The project this chat belongs to, if any. `nil` for the vast
+    /// majority of chats (outside any project) and always `nil` for
+    /// Runs-backed chats — projects are Sessions-only. Chats are only ever
+    /// created inside a project; existing chats are never moved in.
+    var project: Project?
+
     /// Messages belonging to this chat. Cascading delete removes all messages
     /// when the chat is deleted. For Sessions-backed chats this is left
     /// empty in practice — chat history is re-fetched from the server on
@@ -59,6 +65,7 @@ public final class Chat {
         self.lastActiveAt = Date()
         self.hasAutoTitled = false
         self.isPinned = false
+        self.project = nil
         self.messages = []
     }
 
@@ -72,6 +79,7 @@ public final class Chat {
         self.lastActiveAt = Date()
         self.hasAutoTitled = true
         self.isPinned = isPinned
+        self.project = nil
         self.messages = []
     }
 }

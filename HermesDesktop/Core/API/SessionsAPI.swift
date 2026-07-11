@@ -57,7 +57,7 @@ public protocol SessionsAPIProtocol: Actor {
     func renameSession(id: String, title: String) async throws -> SessionInfo
     func deleteSession(id: String) async throws
     func getMessages(sessionId: String) async throws -> [SessionMessage]
-    func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void)
+    func streamChat(sessionId: String, input: String, instructions: String?, sessionKey: String?) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void)
 }
 
 // MARK: - SessionsAPI
@@ -122,7 +122,17 @@ public actor SessionsAPI: SessionsAPIProtocol {
     /// `cancel` closure — there's no documented stop endpoint for chat
     /// streams, so force-terminating the stream locally is the only way to
     /// stop reading further events.
-    public func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+    ///
+    /// - Parameters:
+    ///   - instructions: Project instructions, sent as the `instructions`
+    ///     body field — layered as a system message on top of the agent's
+    ///     personality (verified live, 2026-07-11). `nil` for chats outside
+    ///     a project; the field is omitted from the request entirely rather
+    ///     than sent as an empty string.
+    ///   - sessionKey: A project's `X-Hermes-Session-Key`, sent as a header.
+    ///     `nil` for chats outside a project — the header is omitted, same
+    ///     as before this parameter existed.
+    public func streamChat(sessionId: String, input: String, instructions: String? = nil, sessionKey: String? = nil) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
         let base = apiClient.baseURL.absoluteString
         let path = "/api/sessions/\(sessionId)/chat/stream"
         let urlString = base.hasSuffix("/") ? base + path.dropFirst() : base + path
@@ -131,6 +141,6 @@ public actor SessionsAPI: SessionsAPIProtocol {
         }
 
         let token = try await apiClient.authenticationToken()
-        return await sseClient.connect(url: url, token: token, input: input)
+        return await sseClient.connect(url: url, token: token, input: input, instructions: instructions, sessionKey: sessionKey)
     }
 }

@@ -51,11 +51,16 @@ struct ConversationRowContent: View {
 // Rename / Pin / Delete. Same 26×26 ghost style as `IconActionButton`,
 // placed as a sibling of the row's selection button (not nested inside its
 // label) so the menu remains clickable.
+//
+// `onRename`/`onTogglePin` are optional so the same component serves three
+// row kinds without duplicating this menu: a regular chat row (all three
+// actions), a project's chat row (Rename + Delete — project chats can't be
+// pinned, see docs/UI-SPEC.md §9), and a project row (Delete only).
 
 struct ConversationMenuButton: View {
-    let isPinned: Bool
-    let onRename: () -> Void
-    let onTogglePin: () -> Void
+    var isPinned: Bool = false
+    var onRename: (() -> Void)? = nil
+    var onTogglePin: (() -> Void)? = nil
     let onDelete: () -> Void
     var help: String = "Actions"
 
@@ -63,8 +68,12 @@ struct ConversationMenuButton: View {
 
     var body: some View {
         Menu {
-            Button("Rename") { onRename() }
-            Button(isPinned ? "Unpin" : "Pin") { onTogglePin() }
+            if let onRename {
+                Button("Rename") { onRename() }
+            }
+            if let onTogglePin {
+                Button(isPinned ? "Unpin" : "Pin") { onTogglePin() }
+            }
             Button("Delete", role: .destructive) { onDelete() }
         } label: {
             Image(systemName: "ellipsis")

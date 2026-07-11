@@ -50,12 +50,16 @@ final class ChatSidebarViewModel {
     /// Creates a new, empty Sessions-backed chat (`POST /api/sessions`) and
     /// returns it.
     ///
-    /// - Parameter context: The SwiftData `ModelContext` to insert into.
+    /// - Parameters:
+    ///   - context: The SwiftData `ModelContext` to insert into.
+    ///   - project: When non-`nil`, the new chat is created inside this
+    ///     project — shared by `ProjectView`'s "New chat" button.
     /// - Returns: The newly created `Chat`, or `nil` if the request failed.
-    func createChat(context: ModelContext) async -> Chat? {
+    func createChat(context: ModelContext, project: Project? = nil) async -> Chat? {
         do {
             let session = try await sessionsAPI.createSession()
             let chat = Chat(sessionId: session.id, title: session.title ?? "New chat")
+            chat.project = project
             context.insert(chat)
             try? context.save()
             return chat

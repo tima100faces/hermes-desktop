@@ -13,7 +13,7 @@ final class ModelsTests: XCTestCase {
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Chat.self, Message.self,
+            for: Chat.self, Message.self, Project.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
@@ -109,6 +109,50 @@ final class ModelsTests: XCTestCase {
         // Then: messages are also gone (cascade delete)
         let fetchAfter = try modelContext.fetch(FetchDescriptor<Message>())
         XCTAssertEqual(fetchAfter.count, 0)
+    }
+
+    // MARK: - Project
+
+    func testProjectInit() {
+        let project = Project(name: "Test Project")
+        XCTAssertEqual(project.name, "Test Project")
+        XCTAssertEqual(project.instructions, "")
+        XCTAssertTrue(project.sessionKey.hasPrefix("hermes-desktop:project:"))
+        XCTAssertNotNil(project.createdAt)
+        XCTAssertTrue(project.chats.isEmpty)
+    }
+
+    func testProjectSessionKeyIsUniquePerProject() {
+        let a = Project(name: "A")
+        let b = Project(name: "B")
+        XCTAssertNotEqual(a.sessionKey, b.sessionKey)
+    }
+
+    func testProjectCascadeDeletesItsChats() throws {
+        // Given: a project with one chat
+        let project = Project(name: "Cascade Project")
+        let chat = Chat(sessionId: "session-cascade", title: "In Project")
+        chat.project = project
+        modelContext.insert(project)
+        // NOTE: SwiftData infers the inverse relationship from Chat.project
+        // to Project.chats, so inserting the project inserts its chat.
+        try modelContext.save()
+
+        let fetchBefore = try modelContext.fetch(FetchDescriptor<Chat>())
+        XCTAssertEqual(fetchBefore.count, 1)
+
+        // When: delete the project
+        modelContext.delete(project)
+        try modelContext.save()
+
+        // Then: the chat is also gone (cascade delete)
+        let fetchAfter = try modelContext.fetch(FetchDescriptor<Chat>())
+        XCTAssertTrue(fetchAfter.isEmpty)
+    }
+
+    func testChatOutsideProjectHasNilProject() {
+        let chat = Chat(sessionId: "session-standalone", title: "Standalone")
+        XCTAssertNil(chat.project)
     }
 
     // MARK: - RunEvent

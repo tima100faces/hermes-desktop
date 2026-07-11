@@ -54,12 +54,20 @@ public actor SessionSSEClient {
     ///   - url: The full `.../chat/stream` endpoint URL.
     ///   - token: A Bearer token for authentication.
     ///   - input: The user's message text — sent as the JSON body.
+    ///   - instructions: Project instructions, sent as the `instructions`
+    ///     body field when non-`nil` (verified live against a fresh session,
+    ///     2026-07-11: sets `has_system_prompt` and the agent follows it).
+    ///     Omitted from the body entirely when `nil` — chats outside a
+    ///     project are unaffected.
+    ///   - sessionKey: A project's `X-Hermes-Session-Key`, sent as a header
+    ///     when non-`nil` (server accepts and echoes it back, verified live
+    ///     2026-07-11). Omitted when `nil`.
     /// - Returns: An unbounded `AsyncStream<RunEvent>` that must be consumed,
     ///   plus a `cancel` closure that force-terminates it. There's no
     ///   documented Sessions API stop endpoint, so `ChatConversationService`
     ///   calls `cancel` directly instead of relying on `continuation.onTermination`,
     ///   which only fires once the *consumer* stops iterating.
-    public func connect(url: URL, token: String, input: String) -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+    public func connect(url: URL, token: String, input: String, instructions: String? = nil, sessionKey: String? = nil) -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
         let control = StreamControl()
         let stream = AsyncStream<RunEvent>(bufferingPolicy: .unbounded) { continuation in
             control.continuation = continuation
@@ -68,6 +76,8 @@ public actor SessionSSEClient {
                     url: url,
                     token: token,
                     input: input,
+                    instructions: instructions,
+                    sessionKey: sessionKey,
                     session: session,
                     decoder: decoder,
                     continuation: continuation
@@ -88,6 +98,8 @@ public actor SessionSSEClient {
         url: URL,
         token: String,
         input: String,
+        instructions: String?,
+        sessionKey: String?,
         session: URLSession,
         decoder: JSONDecoder,
         continuation: AsyncStream<RunEvent>.Continuation
@@ -98,7 +110,15 @@ public actor SessionSSEClient {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["message": input])
+        if let sessionKey {
+            request.setValue(sessionKey, forHTTPHeaderField: "X-Hermes-Session-Key")
+        }
+
+        var body: [String: String] = ["message": input]
+        if let instructions {
+            body["instructions"] = instructions
+        }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
             let (bytes, response) = try await session.bytes(for: request)
