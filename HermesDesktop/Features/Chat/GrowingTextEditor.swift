@@ -15,20 +15,40 @@ import AppKit
 // coordinator measures the laid-out text on every change and reports it
 // back through the `height` binding, which the caller applies via
 // `.frame(height:)`.
+//
+// Also reused by `ProjectView`'s instructions field for the same
+// measured-growth behavior, via two opt-in parameters that default to
+// InputBar's exact current behavior: `autoFocus` (InputBar always wants
+// focus on appear) and `onPlainReturn` (InputBar swallows plain Enter to
+// send; `nil` — the instructions field's choice — lets plain Enter insert
+// a normal newline instead, like any other multi-line text field).
 
 struct GrowingTextEditor: NSViewRepresentable {
     @Binding var text: String
     @Binding var height: CGFloat
     let minHeight: CGFloat
     let maxHeight: CGFloat
-    /// Called on plain Enter (no Shift) — Shift+Enter inserts a newline
-    /// at the cursor instead and does not call this.
-    let onPlainReturn: () -> Void
+    /// Whether the editor grabs first responder on appear. Defaults to
+    /// `true`, matching InputBar's original always-focus behavior.
+    var autoFocus: Bool = true
+    /// Called on plain Enter (no Shift) instead of inserting a newline.
+    /// Shift+Enter always inserts a newline at the cursor regardless.
+    /// `nil` (the default for callers other than InputBar) leaves plain
+    /// Enter to insert a newline like Shift+Enter does.
+    var onPlainReturn: (() -> Void)? = nil
+    /// Reports focus gained/lost — InputBar doesn't need this (`nil`);
+    /// `ProjectView`'s instructions field uses it to draw an accent focus
+    /// glow, since a plain `@FocusState` doesn't bridge into this
+    /// AppKit-backed view.
+    var onFocusChange: ((Bool) -> Void)? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = SendAwareTextView()
         textView.delegate = context.coordinator
-        textView.onPlainReturn = { context.coordinator.parent.onPlainReturn() }
+        // `nil` here (not a closure that calls a nil optional) is what lets
+        // `SendAwareTextView.keyDown` fall through to normal newline
+        // insertion for callers that don't want Enter-to-send.
+        textView.onPlainReturn = onPlainReturn == nil ? nil : { context.coordinator.parent.onPlainReturn?() }
 
         textView.isRichText = false
         textView.font = Self.font
@@ -62,8 +82,10 @@ struct GrowingTextEditor: NSViewRepresentable {
         context.coordinator.textView = textView
 
         // Auto-focus, matching the old TextField's `.onAppear { isFocused = true }`.
-        DispatchQueue.main.async {
-            textView.window?.makeFirstResponder(textView)
+        if autoFocus {
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+            }
         }
 
         return scrollView
@@ -100,6 +122,14 @@ struct GrowingTextEditor: NSViewRepresentable {
             recalculateHeight()
         }
 
+        func textDidBeginEditing(_ notification: Notification) {
+            parent.onFocusChange?(true)
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            parent.onFocusChange?(false)
+        }
+
         func recalculateHeight() {
             guard let textView, let layoutManager = textView.layoutManager,
                   let container = textView.textContainer else { return }
@@ -115,18 +145,21 @@ struct GrowingTextEditor: NSViewRepresentable {
 
 // MARK: - SendAwareTextView
 
-/// Intercepts plain Enter to report it via `onPlainReturn` instead of
-/// inserting a newline. Shift+Enter is left untouched, so AppKit inserts
-/// the newline at the current cursor position as usual.
+/// When `onPlainReturn` is set, intercepts plain Enter to report it
+/// instead of inserting a newline (InputBar's Enter-to-send). When `nil`,
+/// plain Enter behaves like any other key — inserts a newline. Shift+Enter
+/// always inserts a newline at the current cursor position either way.
 private final class SendAwareTextView: NSTextView {
     var onPlainReturn: (() -> Void)?
 
     override func keyDown(with event: NSEvent) {
-        guard event.keyCode == 36 /* Return */, !event.modifierFlags.contains(.shift) else {
+        guard event.keyCode == 36 /* Return */,
+              !event.modifierFlags.contains(.shift),
+              let onPlainReturn else {
             super.keyDown(with: event)
             return
         }
-        onPlainReturn?()
+        onPlainReturn()
     }
 }
 

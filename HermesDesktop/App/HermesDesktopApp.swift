@@ -101,6 +101,21 @@ private struct ContentView: View {
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
 
+    @Query private var projects: [Project]
+
+    /// Every project id seen so far — seeded once from `projects` on
+    /// first appearance so pre-existing projects are never mistaken for
+    /// "just created". `nil` before that seeding happens.
+    @State private var knownProjectIDs: Set<PersistentIdentifier>?
+
+    /// The id of the project that should auto-focus its name field —
+    /// set by `onChange(of: selection)` the moment selection lands on a
+    /// project id not in `knownProjectIDs`, cleared once `ProjectView`
+    /// consumes it. This (not a flag threaded through `SidebarView`) is
+    /// how "+" in the sidebar's Projects section gets its new project's
+    /// name field focused without touching the sidebar at all.
+    @State private var autoFocusProjectID: PersistentIdentifier?
+
     // MARK: Body
 
     var body: some View {
@@ -131,6 +146,8 @@ private struct ContentView: View {
                             ProjectView(
                                 project: project,
                                 sessionsAPI: sessionsAPI,
+                                autoFocusName: autoFocusProjectID == project.persistentModelID,
+                                onAutoFocusConsumed: { autoFocusProjectID = nil },
                                 onOpenChat: { chat in selection = .chat(chat) }
                             )
                             .id(project.persistentModelID)
@@ -164,6 +181,18 @@ private struct ContentView: View {
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)
+        }
+        .onAppear {
+            guard knownProjectIDs == nil else { return }
+            knownProjectIDs = Set(projects.map(\.persistentModelID))
+        }
+        .onChange(of: selection) { _, newValue in
+            guard case .project(let project) = newValue else { return }
+            let id = project.persistentModelID
+            guard var known = knownProjectIDs, !known.contains(id) else { return }
+            known.insert(id)
+            knownProjectIDs = known
+            autoFocusProjectID = id
         }
     }
 
