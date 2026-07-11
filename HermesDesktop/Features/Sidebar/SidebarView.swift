@@ -37,6 +37,12 @@ struct SidebarView: View {
     /// default: empty falls back to "Hermes" below.
     @AppStorage("agent_name") private var agentName: String = ""
 
+    /// Opens the Settings scene — the same system action Cmd+, triggers.
+    @Environment(\.openSettings) private var openSettings
+
+    /// Whether the footer's settings gear is under the pointer.
+    @State private var isHoveringSettings = false
+
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
 
@@ -116,12 +122,22 @@ struct SidebarView: View {
                     .lineLimit(1)
                 Spacer()
             }
-            .padding(.horizontal, Space.md)
+            .padding(.leading, Space.md)
+            // Reserves room for the settings button's own box (13pt icon +
+            // 4pt padding each side = 21pt) plus its Space.sm trailing
+            // margin, so a long agent name truncates before running under
+            // it — the button itself is a trailing overlay below, which
+            // doesn't participate in this HStack's layout at all.
+            .padding(.trailing, 21 + Space.sm)
             .padding(.vertical, Space.sm + 2)
             .overlay(alignment: .top) {
                 Rectangle()
                     .fill(Color.white.opacity(0.06))
                     .frame(height: 1)
+            }
+            .overlay(alignment: .trailing) {
+                settingsButton
+                    .padding(.trailing, Space.sm)
             }
             .help(statusHelp)
         }
@@ -200,6 +216,29 @@ struct SidebarView: View {
         }
         .padding(.horizontal, Space.sm)
         .padding(.bottom, Space.sm)
+    }
+
+    // MARK: - Settings Button
+    //
+    // A trailing overlay on the footer row, not an inline HStack sibling —
+    // its own comfortable padded hit box (13pt icon + 4pt padding = 21pt)
+    // is taller than the footer's current text-driven height, and an
+    // overlay never affects the parent's reported size, unlike an inline
+    // sibling would (docs/UI-SPEC.md §9: "высоту футера не менять").
+
+    private var settingsButton: some View {
+        Button(action: { openSettings() }) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 13))
+                .foregroundStyle(isHoveringSettings ? Color.hkInk : Color.hkMuted)
+                .padding(4)
+        }
+        .buttonStyle(.plain)
+        .background(isHoveringSettings ? Color.hkSurface : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .contentShape(Rectangle())
+        .onHover { isHoveringSettings = $0 }
+        .help("Settings")
     }
 
     // MARK: - Rows

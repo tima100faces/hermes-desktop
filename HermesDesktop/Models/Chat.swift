@@ -17,6 +17,12 @@ import SwiftData
 /// pick the transport based on which identifier is set.
 @Model
 public final class Chat {
+    /// Default title for a newly created Sessions-backed chat, before
+    /// auto-titling or a manual rename replaces it. Shared between chat
+    /// creation and `SessionsConversationService.autoTitleIfNeeded`'s
+    /// "only touch it if still untitled" guard, so the literal exists once.
+    public static let defaultTitle = "New chat"
+
     /// Server-side Hermes session id (`POST /api/sessions` response).
     /// `nil` for chats migrated from the old Runs API `Topic` entity.
     @Attribute(.unique) var sessionId: String?

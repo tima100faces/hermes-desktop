@@ -58,7 +58,7 @@ final class ChatSidebarViewModel {
     func createChat(context: ModelContext, project: Project? = nil) async -> Chat? {
         do {
             let session = try await sessionsAPI.createSession()
-            let chat = Chat(sessionId: session.id, title: session.title ?? "New chat")
+            let chat = Chat(sessionId: session.id, title: session.title ?? Chat.defaultTitle)
             chat.project = project
             context.insert(chat)
             try? context.save()
