@@ -18,8 +18,24 @@ struct ChatView: View {
     /// Header title — the topic's or chat's display name.
     private let title: String
 
-    init(title: String, conversationService: ConversationService) {
+    /// The owning project's name, when this chat belongs to one — shown as
+    /// a breadcrumb in the header ahead of the title. `nil` for chats
+    /// outside a project.
+    private let projectName: String?
+
+    /// Returns to the project's page. Always non-`nil` when `projectName`
+    /// is non-`nil`.
+    private let onOpenProject: (() -> Void)?
+
+    init(
+        title: String,
+        conversationService: ConversationService,
+        projectName: String? = nil,
+        onOpenProject: (() -> Void)? = nil
+    ) {
         self.title = title
+        self.projectName = projectName
+        self.onOpenProject = onOpenProject
         _viewModel = State(initialValue: ChatViewModel(conversationService: conversationService))
     }
 
@@ -151,33 +167,28 @@ struct ChatView: View {
 
     // MARK: - Header
 
-    /// Chat title bar with a live subagent badge.
+    /// Chat title bar (`ContentHeaderView`, shared with `ProjectView`) with
+    /// a live subagent badge pinned to the trailing edge.
     private var header: some View {
-        HStack {
-            Text(title)
-                .font(.hkBody.weight(.medium))
-                .foregroundStyle(Color.hkInk)
-                .lineLimit(1)
-
-            Spacer()
-
-            if runningAgentCount > 0 {
-                Text("\(runningAgentCount) subagent\(runningAgentCount == 1 ? "" : "s")")
-                    .font(.hkCaption)
-                    .foregroundStyle(Color.hkAccent2)
-                    .padding(.horizontal, Space.sm + 2)
-                    .padding(.vertical, 2)
-                    .background(Color.hkAccentDim)
-                    .clipShape(Capsule())
-            }
+        let kind: ContentHeaderView.Kind
+        if let projectName, let onOpenProject {
+            kind = .projectChat(projectName: projectName, chatTitle: title, onOpenProject: onOpenProject)
+        } else {
+            kind = .chat(title: title)
         }
-        .padding(.horizontal, Space.md)
-        .padding(.top, Space.md)
-        .padding(.bottom, Space.sm + 2)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(height: 1)
+        return ContentHeaderView(kind: kind, trailing: AnyView(subagentBadge))
+    }
+
+    @ViewBuilder
+    private var subagentBadge: some View {
+        if runningAgentCount > 0 {
+            Text("\(runningAgentCount) subagent\(runningAgentCount == 1 ? "" : "s")")
+                .font(.hkCaption)
+                .foregroundStyle(Color.hkAccent2)
+                .padding(.horizontal, Space.sm + 2)
+                .padding(.vertical, 2)
+                .background(Color.hkAccentDim)
+                .clipShape(Capsule())
         }
     }
 
@@ -249,6 +260,7 @@ struct ScrollToBottomButton: View {
         .overlay(
             Circle().stroke(Color.hkGlowStrong, lineWidth: 1)
         )
+        .contentShape(Circle())
         .onHover { isHovering = $0 }
         .help("Scroll to bottom")
     }

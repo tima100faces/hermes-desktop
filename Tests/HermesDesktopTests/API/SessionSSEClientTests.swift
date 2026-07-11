@@ -13,6 +13,7 @@ final class SessionSSEClientTests: XCTestCase {
     override func tearDown() {
         MockSSEURLProtocol.mockData = nil
         MockSSEURLProtocol.mockStatusCode = 200
+        MockSSEURLProtocol.capturedRequest = nil
     }
 
     private func makeClient() -> SessionSSEClient {
@@ -22,9 +23,13 @@ final class SessionSSEClientTests: XCTestCase {
         return SessionSSEClient(session: session)
     }
 
-    private func collectEvents(from client: SessionSSEClient) async -> [RunEvent] {
+    private func collectEvents(
+        from client: SessionSSEClient,
+        instructions: String? = nil,
+        sessionKey: String? = nil
+    ) async -> [RunEvent] {
         let url = URL(string: "https://example.com/api/sessions/abc/chat/stream")!
-        let (stream, _) = await client.connect(url: url, token: "test-token", input: "hi")
+        let (stream, _) = await client.connect(url: url, token: "test-token", input: "hi", instructions: instructions, sessionKey: sessionKey)
         var events: [RunEvent] = []
         for await event in stream {
             events.append(event)
@@ -81,6 +86,59 @@ final class SessionSSEClientTests: XCTestCase {
 
         XCTAssertEqual(events.count, 1)
         XCTAssertEqual(events[0].type, .runCompleted)
+    }
+
+    // MARK: - Instructions + Session Key (request construction)
+
+    /// `URLSession.bytes(for:)` moves the request body into
+    /// `httpBodyStream` rather than keeping `httpBody` as `Data` by the
+    /// time a custom `URLProtocol` sees it — read whichever is present.
+    private func capturedBody() -> [String: String] {
+        guard let request = MockSSEURLProtocol.capturedRequest else { return [:] }
+        let data: Data
+        if let httpBody = request.httpBody {
+            data = httpBody
+        } else if let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var collected = Data()
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable {
+                let read = stream.read(&buffer, maxLength: buffer.count)
+                guard read > 0 else { break }
+                collected.append(buffer, count: read)
+            }
+            data = collected
+        } else {
+            data = Data()
+        }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: String]) ?? [:]
+    }
+
+    func testWithoutInstructionsOrSessionKeyOmitsBoth() async {
+        let sseData = "event: run.completed\ndata: {}\n\n".data(using: .utf8)!
+        MockSSEURLProtocol.mockData = sseData
+
+        _ = await collectEvents(from: makeClient())
+
+        let request = MockSSEURLProtocol.capturedRequest
+        XCTAssertNil(request?.value(forHTTPHeaderField: "X-Hermes-Session-Key"))
+        XCTAssertEqual(capturedBody(), ["message": "hi"])
+    }
+
+    func testWithInstructionsAndSessionKeySetsHeaderAndBodyField() async {
+        let sseData = "event: run.completed\ndata: {}\n\n".data(using: .utf8)!
+        MockSSEURLProtocol.mockData = sseData
+
+        _ = await collectEvents(
+            from: makeClient(),
+            instructions: "Be concise.",
+            sessionKey: "hermes-desktop:project:abc"
+        )
+
+        let request = MockSSEURLProtocol.capturedRequest
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "X-Hermes-Session-Key"), "hermes-desktop:project:abc")
+        XCTAssertEqual(capturedBody(), ["message": "hi", "instructions": "Be concise."])
     }
 
     // MARK: - Blank-Line Boundaries + Joined Data Lines (the shared fix)

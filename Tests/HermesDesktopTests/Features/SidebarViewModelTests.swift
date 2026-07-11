@@ -10,9 +10,15 @@ actor MockSessionsAPI: SessionsAPIProtocol {
     var createSessionResult: Result<SessionInfo, Error> = .success(SessionInfo(id: "session-1", title: nil))
     var renameSessionResult: Result<SessionInfo, Error> = .success(SessionInfo(id: "session-1", title: "Renamed"))
     var deleteSessionError: Error?
+    /// Per-session-id delete errors, checked before the blanket `deleteSessionError`
+    /// — lets a test make one session fail (e.g. `.notFound`) while others succeed.
+    var deleteSessionErrorsById: [String: Error] = [:]
 
     private(set) var deletedSessionIds: [String] = []
     private(set) var renamedSessionIds: [String] = []
+    /// Captures the arguments of the most recent `streamChat` call, so tests
+    /// can assert what `SessionsConversationService` threaded through.
+    private(set) var lastStreamChatCall: (sessionId: String, input: String, instructions: String?, sessionKey: String?)?
 
     func createSession() async throws -> SessionInfo {
         try createSessionResult.get()
@@ -28,14 +34,16 @@ actor MockSessionsAPI: SessionsAPIProtocol {
     }
 
     func deleteSession(id: String) async throws {
+        if let error = deleteSessionErrorsById[id] { throw error }
         if let error = deleteSessionError { throw error }
         deletedSessionIds.append(id)
     }
 
     func getMessages(sessionId: String) async throws -> [SessionMessage] { [] }
 
-    func streamChat(sessionId: String, input: String) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
-        (AsyncStream { $0.finish() }, {})
+    func streamChat(sessionId: String, input: String, instructions: String?, sessionKey: String?) async throws -> (stream: AsyncStream<RunEvent>, cancel: @Sendable () -> Void) {
+        lastStreamChatCall = (sessionId, input, instructions, sessionKey)
+        return (AsyncStream { $0.finish() }, {})
     }
 
     // MARK: Test Helpers
@@ -50,6 +58,14 @@ actor MockSessionsAPI: SessionsAPIProtocol {
         renameSessionResult = .failure(
             NSError(domain: "mock", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network error"])
         )
+    }
+
+    func setDeleteSessionError(forId id: String, error: Error) {
+        deleteSessionErrorsById[id] = error
+    }
+
+    func clearDeleteSessionError(forId id: String) {
+        deleteSessionErrorsById[id] = nil
     }
 }
 
@@ -68,7 +84,7 @@ final class SidebarViewModelTests: XCTestCase {
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
-            for: Chat.self, Message.self,
+            for: Chat.self, Message.self, Project.self,
             configurations: config
         )
         modelContext = modelContainer.mainContext
@@ -98,6 +114,27 @@ final class SidebarViewModelTests: XCTestCase {
         XCTAssertEqual(chat?.sessionId, "session-1")
         XCTAssertNil(chat?.conversationKey)
         XCTAssertFalse(chat?.isPinned ?? true)
+    }
+
+    func testCreateChatWithProjectSetsProjectRelationship() async throws {
+        // Arrange
+        let project = Project(name: "My Project")
+        modelContext.insert(project)
+
+        // Act
+        let chat = await viewModel.createChat(context: modelContext, project: project)
+
+        // Assert
+        XCTAssertEqual(chat?.project, project)
+        XCTAssertEqual(project.chats, [chat])
+    }
+
+    func testCreateChatWithoutProjectLeavesProjectNil() async throws {
+        // Act
+        let chat = await viewModel.createChat(context: modelContext)
+
+        // Assert
+        XCTAssertNil(chat?.project)
     }
 
     func testCreateChatFailureSetsErrorAndReturnsNil() async throws {

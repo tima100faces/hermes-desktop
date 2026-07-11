@@ -33,7 +33,7 @@ struct HermesDesktopApp: App {
     /// Shared SwiftData container for chats and messages.
     private let modelContainer: ModelContainer = {
         ChatMigrationService.migrateIfNeeded()
-        return try! ModelContainer(for: Chat.self, Message.self)
+        return try! ModelContainer(for: Chat.self, Message.self, Project.self)
     }()
 
     // MARK: Body
@@ -92,14 +92,29 @@ private struct ContentView: View {
 
     let appState: AppState
 
-    /// The chat the user has selected in the sidebar.
-    @State private var selection: Chat?
+    /// What's shown in the main pane — a chat or a project page.
+    @State private var selection: SidebarSelection?
 
     /// Whether the Cmd+K quick-switcher overlay is shown.
     @State private var isPaletteShown = false
 
     @Query(sort: \Chat.lastActiveAt, order: .reverse)
     private var chats: [Chat]
+
+    @Query private var projects: [Project]
+
+    /// Every project id seen so far — seeded once from `projects` on
+    /// first appearance so pre-existing projects are never mistaken for
+    /// "just created". `nil` before that seeding happens.
+    @State private var knownProjectIDs: Set<PersistentIdentifier>?
+
+    /// The id of the project that should auto-focus its name field —
+    /// set by `onChange(of: selection)` the moment selection lands on a
+    /// project id not in `knownProjectIDs`, cleared once `ProjectView`
+    /// consumes it. This (not a flag threaded through `SidebarView`) is
+    /// how "+" in the sidebar's Projects section gets its new project's
+    /// name field focused without touching the sidebar at all.
+    @State private var autoFocusProjectID: PersistentIdentifier?
 
     // MARK: Body
 
@@ -123,20 +138,23 @@ private struct ContentView: View {
                     .ignoresSafeArea()
 
                 Group {
-                    switch (selection, appState.runsAPI, appState.sessionsAPI) {
-                    case (let chat?, let runsAPI?, _) where chat.conversationKey != nil:
-                        ChatView(
-                            title: chat.title,
-                            conversationService: RunsConversationService(runsAPI: runsAPI, chat: chat)
-                        )
-                        .id(chat.persistentModelID)
-                    case (let chat?, _, let sessionsAPI?) where chat.sessionId != nil:
-                        ChatView(
-                            title: chat.title,
-                            conversationService: SessionsConversationService(sessionsAPI: sessionsAPI, chat: chat)
-                        )
-                        .id(chat.persistentModelID)
-                    default:
+                    switch selection {
+                    case .chat(let chat):
+                        chatDetail(for: chat)
+                    case .project(let project):
+                        if let sessionsAPI = appState.sessionsAPI {
+                            ProjectView(
+                                project: project,
+                                sessionsAPI: sessionsAPI,
+                                autoFocusName: autoFocusProjectID == project.persistentModelID,
+                                onAutoFocusConsumed: { autoFocusProjectID = nil },
+                                onOpenChat: { chat in selection = .chat(chat) }
+                            )
+                            .id(project.persistentModelID)
+                        } else {
+                            emptyDetail
+                        }
+                    case nil:
                         emptyDetail
                     }
                 }
@@ -149,7 +167,7 @@ private struct ContentView: View {
                 ChatPaletteView(
                     chats: chats,
                     onSelect: { chat in
-                        selection = chat
+                        selection = .chat(chat)
                         isPaletteShown = false
                     },
                     onDismiss: { isPaletteShown = false }
@@ -163,6 +181,45 @@ private struct ContentView: View {
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)
+        }
+        .onAppear {
+            guard knownProjectIDs == nil else { return }
+            knownProjectIDs = Set(projects.map(\.persistentModelID))
+        }
+        .onChange(of: selection) { _, newValue in
+            guard case .project(let project) = newValue else { return }
+            let id = project.persistentModelID
+            guard var known = knownProjectIDs, !known.contains(id) else { return }
+            known.insert(id)
+            knownProjectIDs = known
+            autoFocusProjectID = id
+        }
+    }
+
+    // MARK: Chat Detail
+
+    /// Picks the transport (`RunsConversationService` for pinned chats,
+    /// `SessionsConversationService` otherwise) and, for a project chat,
+    /// wires the header breadcrumb back to its project's page.
+    @ViewBuilder
+    private func chatDetail(for chat: Chat) -> some View {
+        switch (chat.conversationKey, appState.runsAPI, appState.sessionsAPI) {
+        case (.some, let runsAPI?, _):
+            ChatView(
+                title: chat.title,
+                conversationService: RunsConversationService(runsAPI: runsAPI, chat: chat)
+            )
+            .id(chat.persistentModelID)
+        case (_, _, let sessionsAPI?) where chat.sessionId != nil:
+            ChatView(
+                title: chat.title,
+                conversationService: SessionsConversationService(sessionsAPI: sessionsAPI, chat: chat),
+                projectName: chat.project?.name,
+                onOpenProject: chat.project.map { project in { selection = .project(project) } }
+            )
+            .id(chat.persistentModelID)
+        default:
+            emptyDetail
         }
     }
 
