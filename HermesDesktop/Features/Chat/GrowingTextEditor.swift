@@ -17,11 +17,14 @@ import AppKit
 // `.frame(height:)`.
 //
 // Also reused by `ProjectView`'s instructions field for the same
-// measured-growth behavior, via two opt-in parameters that default to
+// measured-growth behavior, via opt-in parameters that default to
 // InputBar's exact current behavior: `autoFocus` (InputBar always wants
 // focus on appear) and `onPlainReturn` (InputBar swallows plain Enter to
 // send; `nil` — the instructions field's choice — lets plain Enter insert
-// a normal newline instead, like any other multi-line text field).
+// a normal newline instead, like any other multi-line text field). Whether
+// `SendAwareTextView` intercepts plain Enter at all is its own explicit
+// `interceptsPlainReturn` flag, derived once in `makeNSView` — not an
+// implicit reading of whether `onPlainReturn` is `nil`.
 
 struct GrowingTextEditor: NSViewRepresentable {
     @Binding var text: String
@@ -45,10 +48,11 @@ struct GrowingTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let textView = SendAwareTextView()
         textView.delegate = context.coordinator
-        // `nil` here (not a closure that calls a nil optional) is what lets
-        // `SendAwareTextView.keyDown` fall through to normal newline
-        // insertion for callers that don't want Enter-to-send.
-        textView.onPlainReturn = onPlainReturn == nil ? nil : { context.coordinator.parent.onPlainReturn?() }
+        // Always wired up (matches InputBar's original unconditional
+        // assignment) — `interceptsPlainReturn` below, not this closure's
+        // nil-ness, is what decides whether plain Enter is swallowed.
+        textView.onPlainReturn = { context.coordinator.parent.onPlainReturn?() }
+        textView.interceptsPlainReturn = onPlainReturn != nil
 
         textView.isRichText = false
         textView.font = Self.font
@@ -145,21 +149,29 @@ struct GrowingTextEditor: NSViewRepresentable {
 
 // MARK: - SendAwareTextView
 
-/// When `onPlainReturn` is set, intercepts plain Enter to report it
-/// instead of inserting a newline (InputBar's Enter-to-send). When `nil`,
-/// plain Enter behaves like any other key — inserts a newline. Shift+Enter
-/// always inserts a newline at the current cursor position either way.
-private final class SendAwareTextView: NSTextView {
+/// When `interceptsPlainReturn` is `true`, plain Enter calls
+/// `onPlainReturn` instead of inserting a newline (InputBar's
+/// Enter-to-send). When `false`, plain Enter behaves like any other key —
+/// inserts a newline. Shift+Enter always inserts a newline at the current
+/// cursor position either way. The two are separate properties on
+/// purpose: whether to intercept at all is an explicit flag, not an
+/// implicit reading of whether `onPlainReturn` happens to be `nil`.
+///
+/// `internal` (not `private`) so `SendAwareTextViewTests` can drive
+/// `keyDown` directly with a synthesized `NSEvent` — the most reliable way
+/// to pin down this exact behavior, see docs/HANDOFF.md.
+final class SendAwareTextView: NSTextView {
     var onPlainReturn: (() -> Void)?
+    var interceptsPlainReturn = false
 
     override func keyDown(with event: NSEvent) {
-        guard event.keyCode == 36 /* Return */,
-              !event.modifierFlags.contains(.shift),
-              let onPlainReturn else {
+        guard interceptsPlainReturn,
+              event.keyCode == 36 /* Return */,
+              !event.modifierFlags.contains(.shift) else {
             super.keyDown(with: event)
             return
         }
-        onPlainReturn()
+        onPlainReturn?()
     }
 }
 

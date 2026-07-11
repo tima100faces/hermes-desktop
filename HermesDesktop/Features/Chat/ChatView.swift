@@ -260,6 +260,7 @@ struct ScrollToBottomButton: View {
         .overlay(
             Circle().stroke(Color.hkGlowStrong, lineWidth: 1)
         )
+        .contentShape(Circle())
         .onHover { isHovering = $0 }
         .help("Scroll to bottom")
     }
